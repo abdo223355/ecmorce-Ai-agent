@@ -1,0 +1,52 @@
+# Adaptive AI Gateway — local stack (Phase 6 D130–D134). Milestone 1.
+# Start:  docker compose up --build
+# Demo logins + seeded scenarios: backend/SEED_SCENARIOS.md (password in README).
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-dev-only}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ["127.0.0.1:5433:5432"]   # local only (D134); host 5432 was taken by a local Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]  # D90; size → load test
+    restart: unless-stopped
+
+  backend:          # the NovaCart e-commerce backend (Flask, D25)
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://novacart:novacart@postgres:5432/novacart
+      KEY_DIR: /app/keys
+    volumes: ["backend_keys:/app/keys"]
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+
+  gateway:          # the Adaptive AI Gateway (FastAPI)
+    build: ./gateway
+    environment:
+      BACKEND_URL: http://backend:8000
+      JWKS_URL: http://backend:8000/.well-known/jwks.json
+      GATEWAY_DATABASE_URL: postgresql+psycopg://gateway:gateway@postgres:5432/gateway
+      REDIS_URL: redis://redis:6379/0
+      DEV_TOOLS: "1"
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      backend: {condition: service_started}
+      redis: {condition: service_started}
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  backend_keys:
