@@ -34,6 +34,9 @@ RAG_WINDOW_S = 1.5                          # D91: backend + RAG in parallel <= 
 MIN_WINDOW_S = 0.3                          # PROPOSAL: below this, do not start a search at all
 RRF_K = 60                                  # PROPOSAL: the usual RRF constant
 CUSTOMER_ALLOW_LIST = ("POL-SPC-001",)      # D47-a: shown to customers by name
+# Early embedding (decision by عبدالرحمن, option أ): /chat starts embedding the user message when it arrives, in
+# parallel with classify. Its timeout covers classify (cap 1.0 s, D92) + the RAG window (1.5 s). PROPOSAL.
+PREFETCH_TIMEOUT_S = 2.5
 
 
 # ---------- what to do when the embedding call fails (Strategy pattern, his option ب) ----------
@@ -108,11 +111,22 @@ async def _no_hits() -> list[Hit]:
     return []
 
 
+async def _wait_prefetch(task: "asyncio.Task[EmbedResult]", window: float) -> EmbedResult:
+    """Use the early embedding, but never wait past the RAG window for it. shield(): a timeout here must not
+    cancel the task itself (BoundTools.close() does that at the end of the request)."""
+    try:
+        return await asyncio.wait_for(asyncio.shield(task), timeout=window)
+    except asyncio.TimeoutError:
+        return EmbedResult("timeout", reason="prefetch_not_ready")
+
+
 async def search(question: str, audience: str, deadline: Deadline, store: PolicyStore,
-                 embedder: EmbeddingAdapter, english_query: str | None = None) -> ToolResult:
+                 embedder: EmbeddingAdapter, english_query: str | None = None,
+                 prefetched: "asyncio.Task[EmbedResult] | None" = None) -> ToolResult:
     """question: the scrubbed user text (any language), used for the meaning search.
     english_query: the English search query from classify (D53), used for the keyword search. Until classify
-    exists (A5) it is None, so the search is vector-only and a failed embedding means no retrieval."""
+    exists (A5) it is None, so the search is vector-only and a failed embedding means no retrieval.
+    prefetched: an embedding of `question` already started by /chat (early embedding); no new call is made."""
     window = min(RAG_WINDOW_S, deadline.remaining() - settings.reserve_after_backend_s)
     if window < MIN_WINDOW_S:
         return ToolResult("unavailable", reason="no_time_for_retrieval", details={"window_s": round(window, 3)})
@@ -121,7 +135,9 @@ async def search(question: str, audience: str, deadline: Deadline, store: Policy
     try:
         keywords = (store.search_keywords(english_query, audience, k=TOP_K, allow_doc_ids=allow)
                     if english_query else _no_hits())
-        embed, keyword_hits = await asyncio.gather(embedder.embed_query(question, timeout_s=window), keywords)
+        embedding = (_wait_prefetch(prefetched, window) if prefetched is not None
+                     else embedder.embed_query(question, timeout_s=window))
+        embed, keyword_hits = await asyncio.gather(embedding, keywords)
         if not embed.ok:
             outcome = choose_fallback(english_query).apply(embed, keyword_hits)
             return _to_result([(h, h.score) for h in outcome.hits],

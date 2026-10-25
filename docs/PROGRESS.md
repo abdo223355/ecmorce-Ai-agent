@@ -1,5 +1,12 @@
 # Progress log (newest first)
 
+## 2026-10-25 (night, later) — embedding latency: early embedding
+- Measured INSIDE the gateway container (32 calls): query embedding p50 1.10 s, p95 1.17 s, first (cold) call 1.50 s. So about 75% of the 1.5 s RAG window (D91) before any search.
+- DECISION (عبدالرحمن), option أ: early embedding. /chat starts embedding the user message when it arrives, in parallel with classify (BoundTools.prefetch_embedding); policy_search / procedure_search reuse it only when query is the exact same text; retrieve waits for it at most the RAG window (shield, then fallback); BoundTools.close() cancels an unused one. PREFETCH_TIMEOUT_S = 2.5 (classify cap 1.0 + window 1.5, PROPOSAL). Agent contract unchanged.
+- Costs accepted: every message goes to the embedding vendor, also messages that need no policy (against data minimisation, D105). The ingress scrub (D107, M2) does not exist yet, so the text is NOT scrubbed: dev with synthetic data only (D111), must be fixed before go-live. Rejected for now: (ب) Redis cache (helps repeats only, repeat rate unknown), (ج) warm-up (only the first call), (د) faster model (voyage-4-lite: weaker Arabic 9/12, Arabizi 8/12).
+- RESULT (container, simulated 1.0 s classify, 12 questions each): retrieval time after classify p50 1.11 s -> 0.12 s (max 1.51 s -> 0.19 s); no_retrieval 2/12 -> 0/12.
+- Tests: 84 passed. Next: score gate from the eval set (keep raw cosine), commit.
+
 ## 2026-10-25 (night) — contract changed (option ب) and RAG wired into the agent tools
 - DECISION (عبدالرحمن), option ب: policy_search(query, english_query=None) and procedure_search(query, english_query=None). query = scrubbed user text for the meaning search, english_query = English query from classify (D53) for the keyword search. Optional, so calls with query only keep working before A5. Rejected: (أ) one English text for both (a bad translation would break both searches), (ج) a SearchQuery object (extra class for two fields today).
 - Wired: agent/__init__.py Tools protocol, main.py BoundTools._rag (audience from the token role; policy_search = customers only, procedure_search = workers only, else denied wrong_role), PolicyStore opened in the FastAPI lifespan (no wait: DB down -> unavailable, not a crash), /dev/tools/policy_search and procedure_search (?arg=...# Progress log (newest first)en=...). rag/__init__.py contract text updated.

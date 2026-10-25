@@ -6,6 +6,7 @@ Degraded mode, ⑨ outbox/Ticketing, ⑩ audit tables, ⑪ P1 patterns / PII scr
 """
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 
@@ -29,6 +30,22 @@ class BoundTools:
                  store: PolicyStore | None = None, embedder: EmbeddingAdapter | None = None):
         self._c, self._id, self._d = client, identity, deadline
         self._store, self._embedder = store, embedder
+        self._prefetch: tuple[str, asyncio.Task] | None = None
+
+    def prefetch_embedding(self, text: str) -> None:
+        """Early embedding (option أ): start embedding the user message now, in parallel with classify.
+        Cost accepted: every message goes to the embedding vendor, also the ones that need no policy (D105).
+        Until the ingress scrub exists (D107, Milestone 2) this text is NOT scrubbed: synthetic data only (D111)."""
+        if self._embedder is None:
+            return
+        timeout = min(retrieve.PREFETCH_TIMEOUT_S, self._d.remaining() - settings.reserve_after_backend_s)
+        if timeout > 0:
+            self._prefetch = (text, asyncio.create_task(self._embedder.embed_query(text, timeout_s=timeout)))
+
+    def close(self) -> None:
+        """End of the request: stop an early embedding nobody used."""
+        if self._prefetch and not self._prefetch[1].done():
+            self._prefetch[1].cancel()
 
     async def my_recent_orders(self):
         return await customer.my_recent_orders(self._c, self._id, self._d)
@@ -57,7 +74,10 @@ class BoundTools:
             return ToolResult("denied", reason="wrong_role")
         if self._store is None or self._embedder is None:
             return ToolResult("unavailable", reason="policy_store_not_configured")
-        return await retrieve.search(query, audience, self._d, self._store, self._embedder, english_query)
+        # The early embedding is only valid for the exact text it was made from.
+        task = self._prefetch[1] if self._prefetch and self._prefetch[0] == query else None
+        return await retrieve.search(query, audience, self._d, self._store, self._embedder, english_query,
+                                     prefetched=task)
 
 
 class ChatIn(BaseModel):
@@ -107,10 +127,13 @@ async def chat(body: ChatIn, authorization: str | None = Header(default=None)):
     ctx = AgentContext(role=identity.role, message=body.message,  # TODO M2: scrub at ingress (D107)
                        chat_id=f"{identity.subject_id}:{identity.session_id}",
                        remaining_s=deadline.remaining())
+    tools.prefetch_embedding(ctx.message)        # same text the agent passes as `query` to policy_search
     try:
         result = await run_agent(ctx, tools)
     except NotImplementedError:
         return {"status": "not_ready", "message": "The agent is not built yet (docs/AGENT_ROADMAP.md)."}
+    finally:
+        tools.close()
     return {"status": "ok", "result": asdict(result)}  # TODO M2: D66 validate + render placeholders
 
 

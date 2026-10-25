@@ -139,3 +139,34 @@ def test_database_error_becomes_unavailable_not_an_exception():
         r = run(retrieve.search("q", "customers", Deadline(8.0), FakeStore(fail=True), FakeEmbedder(),
                                 english_query=english))
         assert r.status == "unavailable" and r.reason == "policy_store_error"
+
+
+# ---------- early embedding (option أ) ----------
+
+def test_prefetched_embedding_is_used_instead_of_a_new_call():
+    async def go():
+        emb = FakeEmbedder()
+        task = asyncio.ensure_future(emb.embed_query("q", 2.5))
+        store = FakeStore(vector=[hit("2")])
+        r = await retrieve.search("q", "customers", Deadline(8.0), store, emb, prefetched=task)
+        return r, emb
+    r, emb = run(go())
+    assert r.ok and r.details["mode"] == "vector_only" and len(emb.calls) == 1      # only the early call
+
+
+def test_slow_prefetch_is_not_waited_for_past_the_window(monkeypatch):
+    monkeypatch.setattr(retrieve, "RAG_WINDOW_S", 0.05)
+    monkeypatch.setattr(retrieve, "MIN_WINDOW_S", 0.01)        # else the search stops before waiting at all
+
+    async def go():
+        async def slow():
+            await asyncio.sleep(1)
+            return EmbedResult("ok", [[1.0]], "fake", 1)
+        task = asyncio.ensure_future(slow())
+        r = await retrieve.search("q", "customers", Deadline(8.0), FakeStore(), FakeEmbedder(), prefetched=task)
+        alive = not task.cancelled()                       # shield: the task itself is not cancelled here
+        task.cancel()
+        return r, alive
+    r, alive = run(go())
+    assert r.data == [] and r.details["mode"] == "no_retrieval" and r.details["embedding"] == "timeout"
+    assert alive

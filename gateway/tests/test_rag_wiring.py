@@ -55,3 +55,31 @@ def test_wrong_role_is_denied_before_any_search():
 def test_missing_store_is_unavailable_not_a_crash():
     r = run(tools(CUST).policy_search("q"))
     assert r.status == "unavailable" and r.reason == "policy_store_not_configured"
+
+
+def test_early_embedding_is_used_only_for_the_same_text_and_cancelled_at_the_end():
+    async def go():
+        emb = FakeEmbedder()
+        t = tools(CUST, FakeStore(), emb)
+        t.prefetch_embedding("عندي كام يوم أرجّع القميص؟")
+        await t.policy_search("عندي كام يوم أرجّع القميص؟")          # same text: reuses the early embedding
+        same = len(emb.calls)
+        await t.policy_search("a different question")              # different text: new call
+        different = len(emb.calls)
+        t.close()
+        return same, different
+    assert run(go()) == (1, 2)
+
+
+def test_close_cancels_an_unused_early_embedding():
+    async def go():
+        class Slow(FakeEmbedder):
+            async def embed_query(self, text, timeout_s):
+                await asyncio.sleep(5)
+        t = tools(CUST, FakeStore(), Slow())
+        t.prefetch_embedding("hello")
+        await asyncio.sleep(0)
+        t.close()
+        await asyncio.sleep(0)
+        return t._prefetch[1].cancelled()
+    assert run(go()) is True
