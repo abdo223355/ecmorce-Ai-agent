@@ -28,7 +28,7 @@ def set_adapter(adapter: LLMAdapter | None) -> None:
 
 @lru_cache(maxsize=1)
 def _http() -> httpx.AsyncClient:
-    return httpx.AsyncClient()          # one shared connection pool
+    return httpx.AsyncClient(timeout=None)   # one shared connection pool; deadlines come from budget.py via wait_for
 
 
 @lru_cache(maxsize=None)

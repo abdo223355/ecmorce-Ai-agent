@@ -82,13 +82,30 @@ def test_overlap_is_cut_to_max_words(monkeypatch):
     assert chunk_document(DOC)[1].context_before == "governs eligibility only."
 
 
-def test_long_section_is_split_with_overlap(monkeypatch):
+def test_long_section_uses_a_sliding_window(monkeypatch):
     monkeypatch.setattr(chunking, "MAX_WORDS", 10)
-    long_doc = DOC.replace("This policy defines which items may be returned. It governs eligibility only.",
-                           "First paragraph has seven words here now.\n\nSecond paragraph also has many words. Last words end here.")
-    first = [c for c in chunk_document(long_doc) if c.section == "1"]
-    assert [c.part for c in first] == [1, 2]
-    assert first[1].context_before == "First paragraph has seven words here now."
+    monkeypatch.setattr(chunking, "WINDOW_OVERLAP_WORDS", 3)
+    words = " ".join(f"w{i}" for i in range(1, 19)) + "."          # 18 words -> windows start at 0, 7, 14
+    long_doc = DOC.replace("This policy defines which items may be returned. It governs eligibility only.", words)
+    parts = [c for c in chunk_document(long_doc) if c.section == "1"]
+    assert [c.part for c in parts] == [1, 2, 3]
+    assert parts[0].text.split() == [f"w{i}" for i in range(1, 11)]
+    assert parts[1].text.split() == [f"w{i}" for i in range(8, 18)]  # shares w8 w9 w10 with window 1
+    assert parts[2].text.split() == ["w15", "w16", "w17", "w18."]
+    assert all(c.cited == "POL-RET-001 §1@2.1" for c in parts)       # same section: citation unchanged
+    assert parts[1].context_before == "" and parts[2].context_before == ""
+
+
+def test_sliding_window_keeps_line_breaks_and_rejects_bad_overlap(monkeypatch):
+    monkeypatch.setattr(chunking, "MAX_WORDS", 4)
+    monkeypatch.setattr(chunking, "WINDOW_OVERLAP_WORDS", 1)
+    assert chunking._sliding_window("a b\nc d\ne f") == ["a b\nc d", "d\ne f"]
+    monkeypatch.setattr(chunking, "WINDOW_OVERLAP_WORDS", 4)
+    try:
+        chunking._sliding_window("a b c d e")
+    except ValueError:
+        return
+    raise AssertionError("expected ValueError")
 
 
 def test_missing_header_raises():

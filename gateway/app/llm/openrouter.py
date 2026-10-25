@@ -18,7 +18,7 @@ class OpenRouterAdapter(LLMAdapter):
         self._model = model or settings.llm_model
         self._api_key = api_key or settings.openrouter_api_key
         self._base_url = (base_url or settings.llm_base_url).rstrip("/")
-        self._client = client or httpx.AsyncClient()
+        self._client = client or httpx.AsyncClient(timeout=None)   # the deadline is asyncio.wait_for below, not httpx's 5 s default
 
     async def generate(self, prompt: str, schema: type[BaseModel], timeout_s: float,
                        system: str | None = None) -> LLMResult:

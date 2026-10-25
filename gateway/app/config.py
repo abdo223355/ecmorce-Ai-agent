@@ -20,6 +20,12 @@ class Settings:
     # Model adapter (D27 / D71): per-node model names live in llm/models.py; final choice = Step 9 bake-off.
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
     llm_model: str = os.getenv("LLM_MODEL", "")   # optional override for every node (quick tests)
+    embed_model: str = os.getenv("EMBED_MODEL", "")   # overrides llm/models.py EMBEDDING_MODEL
+    embed_dimensions: int = int(os.getenv("EMBED_DIMENSIONS", "0"))   # 0 = the model's full size
+    # Policy store (D48): Gateway DB + its own statement timeout. 1000 ms is a PROPOSAL inside the
+    # 1.5 s backend + RAG budget (D91); tune from the load test.
+    gateway_database_url: str = os.getenv("GATEWAY_DATABASE_URL", "postgresql://gateway:gateway@127.0.0.1:5433/gateway")  # 127.0.0.1, not localhost: on Windows localhost tries IPv6 first
+    rag_statement_timeout_ms: int = int(os.getenv("RAG_STATEMENT_TIMEOUT_MS", "1000"))
     llm_base_url: str = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
     recent_orders_limit: int = int(os.getenv("RECENT_ORDERS_LIMIT", "5"))
     # POL-DWA-001 §4 access window. TEMPORARY constant: in Milestone 2 ⑤ reads it as an ACTIVE

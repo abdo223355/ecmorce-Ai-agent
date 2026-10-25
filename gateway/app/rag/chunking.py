@@ -21,6 +21,11 @@ OVERLAP_MAX_WORDS = 15      # PROPOSAL: آخر جملة من القطعة الل
 # PROPOSAL (not in the design): safety cap. The longest section measured is ~308 words.
 MAX_WORDS = 400
 
+# DECISION (عبدالرحمن): a section longer than MAX_WORDS is cut with a SLIDING WINDOW (not at paragraphs).
+# TODO(عبدالرحمن): حجم التداخل بين نافذتين. PROPOSAL: 50 كلمة (~12% من النافذة).
+#   التداخل هنا جوه نفس القسم، فالاستشهاد بـ § مش بيتأثر، ويقدر يبقى أكبر من الـ 15 كلمة بتوع context_before.
+WINDOW_OVERLAP_WORDS = 50
+
 # TODO(عبدالرحمن): الأقسام القصيرة جداً (< 25 كلمة، 51 من 200): ندمجها مع اللي قبلها ولا نسيبها؟
 #   دلوقتي مش بندمج (الاستشهاد بـ § يفضل دقيق). لو قررت تدمج، التعديل في chunk_document.
 
@@ -101,20 +106,23 @@ def _sentences_tail(text: str, max_words: int) -> str:
     return " ".join(sentences[-1].split()[-max_words:])
 
 
-def _split_long(text: str) -> list[str]:
-    """Split a too-long section at blank lines into pieces of at most MAX_WORDS words (a single paragraph
-    longer than the cap stays whole: we never cut inside a paragraph)."""
-    pieces, cur, count = [], [], 0
-    for para in re.split(r"\n\s*\n", text):
-        n = len(para.split())
-        if cur and count + n > MAX_WORDS:
-            pieces.append("\n\n".join(cur))
-            cur, count = [], 0
-        cur.append(para)
-        count += n
-    if cur:
-        pieces.append("\n\n".join(cur))
-    return pieces
+def _sliding_window(text: str) -> list[str]:
+    """Cut a section longer than MAX_WORDS into windows of MAX_WORDS words that move by
+    (MAX_WORDS - WINDOW_OVERLAP_WORDS) words, so neighbouring windows share WINDOW_OVERLAP_WORDS words.
+    Slices the original string between word positions, so line breaks (table rows) are kept."""
+    words = list(re.finditer(r"\S+", text))
+    if len(words) <= MAX_WORDS:
+        return [text]
+    step = MAX_WORDS - WINDOW_OVERLAP_WORDS
+    if step <= 0:
+        raise ValueError("WINDOW_OVERLAP_WORDS must be smaller than MAX_WORDS")
+    pieces, start = [], 0
+    while True:
+        end = min(start + MAX_WORDS, len(words))
+        pieces.append(text[words[start].start():words[end - 1].end()])
+        if end == len(words):
+            return pieces
+        start += step
 
 
 def chunk_document(text: str, source_file: str = "") -> list[Chunk]:
@@ -129,9 +137,10 @@ def chunk_document(text: str, source_file: str = "") -> list[Chunk]:
         section_text = re.sub(r"\n{3,}", "\n\n", "\n".join(body[idx + 1:end])).strip()
         if not section_text:
             continue
-        for part, piece in enumerate(_split_long(section_text), start=1):
-            chunks.append(Chunk(section=num, title=title, text=piece, part=part,
-                                context_before=_sentences_tail(previous, OVERLAP_MAX_WORDS),
+        for part, piece in enumerate(_sliding_window(section_text), start=1):
+            # part 1 borrows the last sentence of the previous section; later windows already overlap in their text
+            context = _sentences_tail(previous, OVERLAP_MAX_WORDS) if part == 1 else ""
+            chunks.append(Chunk(section=num, title=title, text=piece, part=part, context_before=context,
                                 source_file=source_file, **header))
-            previous = piece
+        previous = piece
     return chunks
