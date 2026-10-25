@@ -143,4 +143,15 @@ def test_keyword_search_finds_exact_terms():
         hits = await s.search_keywords("damaged items", "customers")
         assert [h.section for h in hits] == ["5"]
         assert await s.search_keywords("gift cards", "customers") == []
+        assert await s.search_keywords("the and of", "customers") == []          # only stop words: no error
+    with_store(body)
+
+
+def test_keyword_search_matches_any_word_and_ranks_more_matches_higher():
+    async def body(s):
+        await s.replace_version([chunk(section="2", title="Return Window", text="The return window is 30 days."),
+                                 chunk(section="6", title="Promotions", text="Promotional orders follow the window too.")],
+                                [[1, 0, 0, 0], [0, 1, 0, 0]], MODEL)
+        hits = await s.search_keywords("return window shirt", "customers")       # no chunk says "shirt"
+        assert [h.section for h in hits] == ["2", "6"]                           # 2 matches two words, 6 one
     with_store(body)

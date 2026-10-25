@@ -16,14 +16,19 @@ from .agent import AgentContext, run_agent
 from .backend_client import BackendClient, Deadline
 from .config import settings
 from .identity import AuthError, Identity, JwksCache, verify_token
+from .rag import retrieve
+from .rag.embeddings import EmbeddingAdapter, get_embedder
+from .rag.store import PolicyStore
 from .tools import ToolResult, customer, worker
 
 
 class BoundTools:
     """Implements agent.Tools: binds identity + deadline so the agent never touches them."""
 
-    def __init__(self, client: BackendClient, identity: Identity, deadline: Deadline):
+    def __init__(self, client: BackendClient, identity: Identity, deadline: Deadline,
+                 store: PolicyStore | None = None, embedder: EmbeddingAdapter | None = None):
         self._c, self._id, self._d = client, identity, deadline
+        self._store, self._embedder = store, embedder
 
     async def my_recent_orders(self):
         return await customer.my_recent_orders(self._c, self._id, self._d)
@@ -40,11 +45,19 @@ class BoundTools:
     async def shipment_details(self, shipment_id: str, requested_fields: list[str]):
         return await worker.shipment_details(self._c, self._id, shipment_id, requested_fields, self._d)
 
-    async def policy_search(self, query: str):
-        return ToolResult("not_implemented", reason="rag_not_built")
+    async def policy_search(self, query: str, english_query: str | None = None):
+        return await self._rag("customer", "customers", query, english_query)
 
-    async def procedure_search(self, query: str):
-        return ToolResult("not_implemented", reason="rag_not_built")
+    async def procedure_search(self, query: str, english_query: str | None = None):
+        return await self._rag("worker", "delivery_workers", query, english_query)
+
+    async def _rag(self, role: str, audience: str, query: str, english_query: str | None):
+        """The audience comes from the verified token's role, never from the agent (D1, D47)."""
+        if self._id.role != role:
+            return ToolResult("denied", reason="wrong_role")
+        if self._store is None or self._embedder is None:
+            return ToolResult("unavailable", reason="policy_store_not_configured")
+        return await retrieve.search(query, audience, self._d, self._store, self._embedder, english_query)
 
 
 class ChatIn(BaseModel):
@@ -55,8 +68,18 @@ class ChatIn(BaseModel):
 async def lifespan(app: FastAPI):
     app.state.backend = BackendClient()
     app.state.jwks = JwksCache(settings.jwks_url)
+    # Policy store (D48): opened without waiting, so the Gateway starts even if the DB is late;
+    # a search while it is down returns ToolResult("unavailable") instead of crashing.
+    app.state.store = PolicyStore()
+    await app.state.store.open()
+    app.state.embedder = get_embedder()
     yield
+    await app.state.store.close()
     await app.state.backend.aclose()
+
+
+def bound_tools(identity: Identity, deadline: Deadline) -> "BoundTools":
+    return BoundTools(app.state.backend, identity, deadline, app.state.store, app.state.embedder)
 
 
 app = FastAPI(title="NovaCart Adaptive AI Gateway", lifespan=lifespan)
@@ -80,7 +103,7 @@ async def health():
 async def chat(body: ChatIn, authorization: str | None = Header(default=None)):
     identity = await current_identity(authorization)
     deadline = Deadline(settings.request_budget_s)
-    tools = BoundTools(app.state.backend, identity, deadline)
+    tools = bound_tools(identity, deadline)
     ctx = AgentContext(role=identity.role, message=body.message,  # TODO M2: scrub at ingress (D107)
                        chat_id=f"{identity.subject_id}:{identity.session_id}",
                        remaining_s=deadline.remaining())
@@ -96,22 +119,24 @@ import os  # noqa: E402
 
 if os.getenv("DEV_TOOLS", "1") == "1":
     @app.get("/dev/tools/{name}")
-    async def dev_tool(name: str, arg: str | None = None, fields: str | None = None,
+    async def dev_tool(name: str, arg: str | None = None, fields: str | None = None, en: str | None = None,
                        authorization: str | None = Header(default=None)):
         identity = await current_identity(authorization)
-        t = BoundTools(app.state.backend, identity, Deadline(settings.request_budget_s))
+        t = bound_tools(identity, Deadline(settings.request_budget_s))
         calls = {
             "my_recent_orders": lambda: t.my_recent_orders(),
             "order_details": lambda: t.order_details(arg or ""),
             "my_shipments_today": lambda: t.my_shipments_today(arg or "list"),
             "shipment_details": lambda: t.shipment_details(arg or "", (fields or "").split(",") if fields else []),
+            "policy_search": lambda: t.policy_search(arg or "", en),          # ?arg=<question>&en=<english query>
+            "procedure_search": lambda: t.procedure_search(arg or "", en),
         }
         if name not in calls:
             raise HTTPException(404, "unknown tool")
         res = await calls[name]()
         data = res.data
         if isinstance(data, list):
-            data = [d.model_dump(mode="json") for d in data]
+            data = [d.model_dump(mode="json") if hasattr(d, "model_dump") else d for d in data]
         elif hasattr(data, "model_dump"):
             data = data.model_dump(mode="json")
         return {"status": res.status, "reason": res.reason, "details": res.details, "data": data}

@@ -46,8 +46,11 @@ class Tools(Protocol):
     async def check_eligibility(self, kind: str, order) -> ToolResult: ...
     async def my_shipments_today(self, query: str) -> ToolResult: ...
     async def shipment_details(self, shipment_id: str, requested_fields: list[str]) -> ToolResult: ...
-    async def policy_search(self, query: str) -> ToolResult: ...      # your RAG (customer audience)
-    async def procedure_search(self, query: str) -> ToolResult: ...   # your RAG (worker audience)
+    # Your RAG. query = the scrubbed user text (any language) -> meaning search.
+    # english_query = the English search query from classify (D53) -> keyword search. Contract changed with
+    # عبدالرحمن (option ب, 2026-10-25): optional, so the agent can call with query only before classify exists.
+    async def policy_search(self, query: str, english_query: str | None = None) -> ToolResult: ...     # customers
+    async def procedure_search(self, query: str, english_query: str | None = None) -> ToolResult: ...  # workers
 
 
 async def run_agent(ctx: AgentContext, tools: Tools) -> AgentResult:

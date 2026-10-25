@@ -194,12 +194,15 @@ class PolicyStore:
     async def search_keywords(self, query_text: str, audience: str, k: int = 5,
                               allow_doc_ids: tuple[str, ...] = ()) -> list[Hit]:
         """PostgreSQL full-text search on the ENGLISH search query (D51, D53). Also the fallback when the
-        embedding provider is down (D49): it needs no external call."""
+        embedding provider is down (D49): it needs no external call.
+        ANY word may match (OR), and chunks matching more words rank higher. With AND, "return window shirt"
+        missed the Return Window section because it never says "shirt" (found in the real-corpus check)."""
         sql = f"""SELECT v.doc_id, v.version, c.section, c.part, c.title, c.text,
-                         ts_rank_cd(c.tsv, q) AS score
+                         ts_rank_cd(c.tsv, t.q) AS score
                   FROM policy_chunks c JOIN policy_versions v ON v.version_id = c.version_id,
-                       websearch_to_tsquery('english', %(text)s) q
-                  WHERE {self._FILTER} AND c.tsv @@ q
+                       (SELECT NULLIF(replace(plainto_tsquery('english', %(text)s)::text, '&', '|'), '')::tsquery
+                        AS q) t
+                  WHERE {self._FILTER} AND c.tsv @@ t.q
                   ORDER BY score DESC
                   LIMIT %(k)s"""
         return await self._hits(sql, {"text": query_text, "audience": audience,

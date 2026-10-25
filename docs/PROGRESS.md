@@ -1,5 +1,31 @@
 # Progress log (newest first)
 
+## 2026-10-25 (night) — contract changed (option ب) and RAG wired into the agent tools
+- DECISION (عبدالرحمن), option ب: policy_search(query, english_query=None) and procedure_search(query, english_query=None). query = scrubbed user text for the meaning search, english_query = English query from classify (D53) for the keyword search. Optional, so calls with query only keep working before A5. Rejected: (أ) one English text for both (a bad translation would break both searches), (ج) a SearchQuery object (extra class for two fields today).
+- Wired: agent/__init__.py Tools protocol, main.py BoundTools._rag (audience from the token role; policy_search = customers only, procedure_search = workers only, else denied wrong_role), PolicyStore opened in the FastAPI lifespan (no wait: DB down -> unavailable, not a crash), /dev/tools/policy_search and procedure_search (?arg=...# Progress log (newest first)en=...). rag/__init__.py contract text updated.
+- LIVE (gateway in Docker, real tokens): customer Arabic + English -> hybrid, POL-RET-001 §2 first; customer Arabizi only -> vector_only, PRC-MIS-001 §4 first; worker damaged parcel -> PRC-DMG-001 §4 first; worker calling policy_search -> denied wrong_role. Total latency 1.05-1.36 s, no embedding timeout in this run.
+- Note for the score gate (D114): RRF scores (~0.016) are rank-based, not similarity. The gate will need the raw cosine score kept in the result.
+- Tests: 80 passed. Next: latency (p95 of query embedding, query-embedding cache), score gate from the eval set, commit.
+
+## 2026-10-25 (later) — A3: retrieve.py written (his fallback part still TODO)
+- retrieve.search(question, audience, deadline, store, embedder, english_query=None) -> ToolResult: window = min(1.5 s D91, remaining - 2.2 s reserve); embed_query and keyword search run in parallel; vector search; Reciprocal Rank Fusion (PROPOSAL, RRF_K=60; design says "fused score" without a method); top 5 (D94); customer allow-list POL-SPC-001 (D47-a); DB errors -> ToolResult unavailable. No score gate yet (D114: from evals).
+- Keyword search fixed: any word may match (OR), more matches rank higher. "return window shirt" now finds Return Window.
+- DECISION (عبدالرحمن), option ب: Strategy pattern. FallbackPolicy (ABC, apply(embed, keyword_hits) -> FallbackOutcome) with KeywordOnlyFallback (an English query exists: return keyword hits marked mode=keyword_only) and NoAnswerFallback (no English query: return [] with mode=no_retrieval so the agent hands off). choose_fallback(english_query) picks. Same principle applied to the normal path: no English query -> no keyword search at all (mode=vector_only), to avoid chance matches of English words in Arabic text. Cost accepted: until classify gives the English query (A5), an embedding timeout on any question means a handoff. Claude wrote the code to his design; the earlier "he writes on_embedding_failure" plan was replaced by this.
+- REAL EVENT: first live run hit the fallback: embed_query timed out at the 1.5 s window on a cold connection. Measured 10 calls: 1 timeout (the first, cold), the rest 0.44-1.31 s, so a warm call still uses most of the RAG window.
+- Tests: 72 passed (host venv, real pgvector).
+- Not done: wiring policy_search / procedure_search in main.py BoundTools (needs the contract decision: one query text or two).
+- Second live run (after option ب): ALL 3 queries hit the embedding timeout at 1.5 s and went keyword_only. Results: return question -> POL-RET-001 §2 first (right); worker damage -> PRC-DMG-001 (right doc, §2 before §4); Arabizi missing parcel -> POL-CAN-001 first, the right PRC-MIS-001 second (keyword-only is weaker, as expected). Embedding latency vs the 1.5 s window is now the main RAG risk (1 of 10 timeouts in one run, 3 of 3 in another).
+- Tests: 76 passed.
+- Next: contract decision (Tools.policy_search: one text or two), wiring in main.py, then the latency problem (measure p95, consider a query-embedding cache).
+
+## 2026-10-25 — A3 started (explanation + first question), RAG report PDF
+- Made D:ecmorce Ai agentRAG_Design_Report.pdf (6 pages, outside the repo): RAG steps so far vs BRD v1.3 FR-01..FR-14 and design decisions D47..D114.
+- .claude/launch.json at the session root (D:ecmorce Ai agent.claude) with gateway :8080 and backend :8000 in attach mode (no command: Docker owns the ports).
+- A3 explained. Found a contract gap to decide WITH him: Tools.policy_search(query) takes ONE text, but D51/D53 need two (the scrubbed original for vector search + the English search query from classify for full-text).
+- His answer to the fallback question: "use semantic search; the LLM translates the request, embeds it and searches via the agentic RAG". Graded WEAK: semantic search needs the embedding call, which is exactly what failed in the scenario; an extra LLM translation adds latency; the agentic round (D50) is for weak scores, not for a failed provider; D49 says keyword-only when the embedding provider is down. Correct answer NOT given yet (he did not ask for it), he ended the session.
+- Open question (exact wording): "عميل سأل: \"عندي كام يوم أرجّع القميص؟\". embed_query() رجّع timeout بعد 1.2 ثانية. retrieve.py يعمل إيه في الحالة دي بالظبط، وليه؟ فكّر في 3 حاجات: هل نعيد المحاولة؟ نستخدم أنهي بحث بداله؟ ونقول للـ agent إيه عن جودة النتيجة؟"
+- Next: his revised answer, then the contract decision (one query or two), then build retrieve.py + wire policy_search / procedure_search in main.py BoundTools.
+
 ## 2026-10-24 — store.py started (explanation only) + sliding window for long sections
 - Explained D48 for store.py: version status lives ONCE in policy_versions, chunks point to it by version_id, search JOINs them (no drift). His question answered by Claude (he asked "جاوب"). No store code yet; gateway has no DB driver yet (psycopg + pgvector to add).
 - DECISION (عبدالرحمن): sections longer than MAX_WORDS (400) are cut with a SLIDING WINDOW of 400 words, overlap 50 words (PROPOSAL, TODO(عبدالرحمن) WINDOW_OVERLAP_WORDS), replacing the paragraph split. Same section, so citation is unchanged; windows after the first get no context_before. Real corpus unchanged: 185 chunks, no section above 400 words today.
