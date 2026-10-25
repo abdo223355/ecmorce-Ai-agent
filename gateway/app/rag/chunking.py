@@ -1,11 +1,13 @@
-"""Chunking rule (D47): one chunk per numbered policy section, plus a small overlap.
+"""Chunking: one chunk per numbered policy section, with a small overlap.
 
-Input is the text of ONE policy PDF as `pdftotext -layout` prints it (tables keep their row order). Pure functions,
-no file or network access, so they are easy to test. Reading the PDF is ingest.py's job.
+The input is the text of one policy PDF as `pdftotext -layout` prints it (tables keep their row order).
+Everything here is a pure function with no file or network access, which keeps it easy to test.
+Reading the PDF itself is ingest.py's job.
 
-Known limits (to handle in ingest / later):
-- Tables come out of the PDF as scrambled text; a table stays inside its section, but its cells are not aligned.
-- Glossary "one chunk per row" (D47) needs real table extraction; here the Glossary is chunked like any section.
+Known limits:
+- Tables come out of the PDF as loose text. A table stays inside its section, but its cells are not aligned.
+- The glossary should be one chunk per row (D47). That needs real table extraction, so for now it is
+  chunked like any other document.
 """
 from __future__ import annotations
 
@@ -13,32 +15,31 @@ import re
 
 from .models import Chunk
 
-# TODO(عبدالرحمن): قاعدة الـ overlap. دي بتاعتك: الوحدة (جمل ولا كلمات) والحد الأقصى.
-#   Hint: الأقسام عندنا قصيرة (الوسيط ~41 كلمة)، فأي رقم كبير بيبقى نص القسم تكرار.
-#   الـ overlap بيدخل في نص الـ embedding بس (context_before)، مش في النص اللي بيتعرض ويتستشهد بيه.
-OVERLAP_MAX_WORDS = 15      # PROPOSAL: آخر جملة من القطعة اللي قبل، بحد أقصى 15 كلمة
+# How much of the previous section is borrowed as context. One sentence, capped at 15 words: sections are
+# short (median around 45 words), so a bigger overlap would mostly repeat the section itself. It is only used
+# when embedding (context_before), never in the text we show or cite.
+OVERLAP_MAX_WORDS = 15
 
-# PROPOSAL (not in the design): safety cap. The longest section measured is ~308 words.
+# Sections longer than this are split. The longest one in the corpus is about 308 words, so it never triggers today.
 MAX_WORDS = 400
 
-# DECISION (عبدالرحمن): a section longer than MAX_WORDS is cut with a SLIDING WINDOW (not at paragraphs).
-# TODO(عبدالرحمن): حجم التداخل بين نافذتين. PROPOSAL: 50 كلمة (~12% من النافذة).
-#   التداخل هنا جوه نفس القسم، فالاستشهاد بـ § مش بيتأثر، ويقدر يبقى أكبر من الـ 15 كلمة بتوع context_before.
+# A split section is cut with a sliding window: each window is MAX_WORDS long and shares this many words
+# with the next one. The windows are all the same section, so the citation does not change.
 WINDOW_OVERLAP_WORDS = 50
 
-# TODO(عبدالرحمن): الأقسام القصيرة جداً (< 25 كلمة، 51 من 200): ندمجها مع اللي قبلها ولا نسيبها؟
-#   دلوقتي مش بندمج (الاستشهاد بـ § يفضل دقيق). لو قررت تدمج، التعديل في chunk_document.
+# Very short sections (under about 25 words) are kept as their own chunks and not merged into the previous
+# one, so that a citation still points at the exact section.
 
 _HEADER = re.compile(r"^NovaCart Document (\S+) - Version (\S+) - Status: (\S+)")
 _HEADING = re.compile(r"^(\d{1,2})\.\s+([A-Z][^\n]{1,100})$")
-_EMBEDDED_NUMBER = re.compile(r"\s\d{1,2}\.\s")       # "1. Purpose 2. Terms" = a table-of-contents line
+_EMBEDDED_NUMBER = re.compile(r"\s\d{1,2}\.\s")       # "1. Purpose 2. Terms" is a table-of-contents line
 _NOISE_PREFIXES = ("NOVACART - SYNTHETIC", "NovaCart |")
 _PAGE = re.compile(r"^Page \d+$")
 
 
 def parse_header(lines: list[str]) -> dict:
-    """doc_id, version, status from the 'NovaCart Document X - Version Y - Status: Z' line,
-    title from the line above it, audience tags from the metadata block."""
+    """Read doc id, version and status from the 'NovaCart Document X - Version Y - Status: Z' line,
+    the title from the line above it, and the audience from the metadata block."""
     for i, line in enumerate(lines):
         m = _HEADER.match(line.strip())
         if m:
@@ -53,8 +54,9 @@ def parse_header(lines: list[str]) -> dict:
 
 
 def _audience(lines: list[str]) -> tuple[str, ...]:
-    """Look for the audience names in the metadata block (between 'Document Metadata' and 'Table of Contents').
-    Works on both plain and -layout text, where the label / value columns come out in a different order."""
+    """Find the audience names in the metadata block, between 'Document Metadata' and 'Table of Contents'.
+    Plain and -layout text print the label and value columns in a different order, so we search the whole
+    block for the names instead of relying on position."""
     start = next((i for i, l in enumerate(lines) if l.strip().startswith("Document Metadata")), None)
     if start is None:
         return ()
@@ -69,25 +71,30 @@ def _audience(lines: list[str]) -> tuple[str, ...]:
 
 
 def _clean(lines: list[str]) -> list[str]:
-    """Drop the repeated page banner, page footer and page numbers; squeeze the wide gaps -layout leaves."""
+    """Drop the page banner, the footer and page numbers that repeat on every page, and squeeze the wide
+    gaps that -layout leaves between table columns."""
     return [re.sub(r"[ \t]{2,}", " ", l).strip() for l in lines
             if not l.startswith(_NOISE_PREFIXES) and not _PAGE.match(l.strip())]
 
 
 def _headings(lines: list[str]) -> list[tuple[int, str, str]]:
-    """(line index, number, title) of the real section headings: the longest run 1, 2, 3, ... of whole-line
-    headings. This skips the table of contents and numbered steps inside a section."""
+    """Find the real section headings as (line index, number, title).
+
+    Numbered lines show up in three places: the table of contents, the section headings, and numbered steps
+    inside a section. The headings are the longest run of 1, 2, 3, ... made of whole-line titles, which
+    skips the other two.
+    """
     runs: list[list[tuple[int, str, str]]] = []
     for i, line in enumerate(lines):
         m = _HEADING.match(line.strip())
-        # a heading is a short title: a numbered STEP is a sentence that ends with a period
+        # A heading is a short title. A numbered step is a sentence that ends with a period.
         if not m or _EMBEDDED_NUMBER.search(m.group(2)) or m.group(2).rstrip().endswith((".", ";", ":")):
             continue
         num, title = int(m.group(1)), m.group(2).strip()
         if num == 1:
             runs.append([(i, "1", title)])
             continue
-        # continue the most recent run that is waiting for this number
+        # extend the most recent run that is waiting for this number
         for run in reversed(runs):
             if int(run[-1][1]) == num - 1:
                 run.append((i, str(num), title))
@@ -96,8 +103,11 @@ def _headings(lines: list[str]) -> list[tuple[int, str, str]]:
 
 
 def _sentences_tail(text: str, max_words: int) -> str:
-    """Last sentence of `text`, cut to its last `max_words` words. "" when the text does not end with a
-    sentence (e.g. it ends with a table row): overlap from a table row would be noise."""
+    """The last sentence of `text`, cut to its last `max_words` words.
+
+    Returns "" when the text does not end in a sentence (it ends with a table row, say), because
+    borrowing a table row as context would just add noise.
+    """
     if not re.search(r"[.!?][\"')]*$", text.strip()):
         return ""
     sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]
@@ -107,9 +117,12 @@ def _sentences_tail(text: str, max_words: int) -> str:
 
 
 def _sliding_window(text: str) -> list[str]:
-    """Cut a section longer than MAX_WORDS into windows of MAX_WORDS words that move by
-    (MAX_WORDS - WINDOW_OVERLAP_WORDS) words, so neighbouring windows share WINDOW_OVERLAP_WORDS words.
-    Slices the original string between word positions, so line breaks (table rows) are kept."""
+    """Cut a section longer than MAX_WORDS into windows of MAX_WORDS words.
+
+    Each window starts MAX_WORDS - WINDOW_OVERLAP_WORDS words after the previous one, so neighbours share
+    WINDOW_OVERLAP_WORDS words. It slices the original string between word positions, which keeps line
+    breaks (and so table rows) intact.
+    """
     words = list(re.finditer(r"\S+", text))
     if len(words) <= MAX_WORDS:
         return [text]
@@ -138,7 +151,8 @@ def chunk_document(text: str, source_file: str = "") -> list[Chunk]:
         if not section_text:
             continue
         for part, piece in enumerate(_sliding_window(section_text), start=1):
-            # part 1 borrows the last sentence of the previous section; later windows already overlap in their text
+            # The first window borrows the last sentence of the previous section.
+            # Later windows already overlap with their neighbour in their own text.
             context = _sentences_tail(previous, OVERLAP_MAX_WORDS) if part == 1 else ""
             chunks.append(Chunk(section=num, title=title, text=piece, part=part, context_before=context,
                                 source_file=source_file, **header))

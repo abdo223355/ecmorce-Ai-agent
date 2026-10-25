@@ -49,7 +49,7 @@ def test_fuse_puts_chunks_found_by_both_searches_first_and_keeps_top_k():
     assert fused[0][1] > fused[1][1]
 
 
-# ---------- the fallback policies (option ب) ----------
+# ---------- fallback policies ----------
 
 def test_keyword_only_policy_returns_the_keyword_hits_and_marks_them():
     out = retrieve.KeywordOnlyFallback().apply(TIMEOUT, [hit(str(i)) for i in range(1, 8)])
@@ -141,7 +141,7 @@ def test_database_error_becomes_unavailable_not_an_exception():
         assert r.status == "unavailable" and r.reason == "policy_store_error"
 
 
-# ---------- early embedding (option أ) ----------
+# ---------- early embedding ----------
 
 def test_prefetched_embedding_is_used_instead_of_a_new_call():
     async def go():

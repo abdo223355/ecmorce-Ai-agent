@@ -1,4 +1,4 @@
-"""Scripted adapter for tests and offline development: no network, no key."""
+"""A scripted adapter for tests and offline work: no network, no API key."""
 from __future__ import annotations
 
 from pydantic import BaseModel
@@ -7,8 +7,11 @@ from . import LLMAdapter, LLMResult
 
 
 class FakeAdapter(LLMAdapter):
-    """Returns the queued responses in order. Each item is a dict (valid output), a ready LLMResult
-    (to simulate a failure), or a BaseModel instance. Records every call in `.calls`."""
+    """Hands back the queued responses one by one.
+
+    Each item can be a dict (valid output), a BaseModel instance, or a ready-made LLMResult when you
+    want to simulate a failure. Every call is recorded in `.calls`.
+    """
 
     def __init__(self, *responses: dict | BaseModel | LLMResult):
         self._queue = list(responses)

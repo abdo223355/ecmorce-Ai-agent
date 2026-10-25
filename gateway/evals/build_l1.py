@@ -1,12 +1,13 @@
-"""Build the L1 retrieval set from EVL-RAG-001 and FREEZE its held-out split (D118: 20% of each layer, written
-before tuning, never used for tuning).
+"""Build the L1 retrieval set from EVL-RAG-001 and freeze its held-out split.
 
     python -m evals.build_l1 [--pdf PATH] [--force]
 
-Split rule (fixed, so anyone can rebuild the same split): inside each category, sorted by question id,
-every 5th question (positions 5, 10, 15, ...) is held-out; the rest is the tuning split.
-BLOCKED (Step 9): a question whose expected documents were missing from the project when the plan was written.
-Those documents are now in the corpus, so the tag is kept as data and the decision is his (see docs/PROGRESS.md).
+The held-out part is 20% of every category. It is fixed up front and never used for tuning.
+The split rule is deterministic so anyone can rebuild the same one: inside each category, questions sorted
+by id, every 5th (positions 5, 10, 15, ...) is held-out and the rest is the tuning split.
+
+BLOCKED used to mean "the expected documents were missing from the project when the plan was written".
+All of those documents are in the corpus now, so nothing is blocked (see BLOCKED_DOCS below).
 """
 from __future__ import annotations
 
@@ -22,11 +23,11 @@ from pypdf import PdfReader
 OUT = Path(__file__).parent / "data" / "l1_evl_rag_001.json"
 DEFAULT_PDF = Path(__file__).resolve().parents[3] / "Rag_files" / "NovaCart_RAG_Corpus" / "Evaluation" / \
     "29_RAG_Evaluation_Set.pdf"
-# BLOCKED (Step 9) was written when these 7 documents were missing from the project:
-# POL-ESC-001, PRC-MIS-001, POL-COM-001, REF-OST-001, REF-RST-001, POL-ACC-001, POL-IDV-001.
-# DECISION (عبدالرحمن, 2026-10-26): all 7 are in the corpus now, so nothing is BLOCKED. A question whose expected
-# documents are not visible to its role (POL-COM-001 is internal-audience) is NOT blocked: l1_retrieval.py counts
-# it as "not answerable" and scores abstention. Put a doc id here again only if it is missing from the corpus.
+# Seven documents were missing when the evaluation plan was written: POL-ESC-001, PRC-MIS-001, POL-COM-001,
+# REF-OST-001, REF-RST-001, POL-ACC-001 and POL-IDV-001. They are all in the corpus now, so this is empty.
+# A question whose expected documents the role can't see (POL-COM-001 is internal) is not blocked either:
+# l1_retrieval.py counts it as "not answerable" and scores whether we abstain.
+# Add a document id here again only if it goes missing from the corpus.
 BLOCKED_DOCS: set[str] = set()
 _DOC = re.compile(r"\b((?:POL|REF|PRC|GDL|EVL)-[A-Z]{3}-\d{3})\b")
 _CATEGORY = re.compile(r"^\d\. (.+) Questions \(\d+\)$")

@@ -1,17 +1,19 @@
-"""⑥ Policies / RAG — YOUR PART (عبدالرحمن).
+"""Policy RAG: chunking, embeddings, the pgvector store, ingestion and retrieval.
 
-Contract the agent tools expect (D43 tools 4 and C), changed with عبدالرحمن (option ب, 2026-10-25):
+What the agent tools call (implemented by retrieve.search):
     async def policy_search(query: str, english_query: str | None = None) -> ToolResult     # customers
     async def procedure_search(query: str, english_query: str | None = None) -> ToolResult  # workers
-query = scrubbed user text (meaning search); english_query = English search query from classify (keyword search).
-The audience is bound by the Gateway from the token role (main.BoundTools), never chosen by the agent.
-Implementation: retrieve.search(). ToolResult.data = list of chunks:
-{doc_id, version, section, part, title, text, score, cited}; ToolResult.details["mode"] says how it was found
-(hybrid / vector_only / keyword_only / no_retrieval).
 
-Design rules (docs/design/Phase4_Step4_RAG.md, Phase 5 D94):
-- Only ACTIVE versions; filter by Audience; customer allow-list POL-SPC-001 (D47, D47-a).
-- pgvector inside the Gateway DB (D48); keyword-only fallback when the embedding provider is down (D49).
-- top-k 5, at most 1 extra agentic round, at most 8 chunks per request; score gate chosen from evals (D94, D114).
-- Questions are scrubbed before embedding (D72); never index internal-only documents (D105).
+query is the scrubbed user text and drives the meaning search. english_query is the English search query
+that classify produces and drives the keyword search. The audience is set by the Gateway from the token's
+role (main.BoundTools), never by the agent.
+
+ToolResult.data is a list of chunks: {doc_id, version, section, part, title, text, score, vector_score, cited}.
+ToolResult.details["mode"] tells how they were found: hybrid, vector_only, keyword_only or no_retrieval.
+
+Rules (docs/design/Phase4_Step4_RAG.md, D94):
+- Only ACTIVE versions, filtered by audience, plus the customer allow-list (POL-SPC-001).
+- pgvector lives in the Gateway database; when the embedding provider is down we fall back to keywords.
+- top-k is 5, with at most one extra agentic round and at most 8 chunks per request.
+- Questions are scrubbed before embedding, and internal-only documents are never indexed.
 """

@@ -1,13 +1,14 @@
-"""Embedding adapter (D49): turns text into vectors. Same pattern as the LLM adapter (app/llm):
-expected failures come back as a typed EmbedResult, never as an exception to the caller.
+"""Embedding adapter: turns text into vectors.
 
-Two methods on purpose: documents and queries may need different prefixes (some models want
-"query: " / "passage: "). The prefix stays inside the adapter, so changing the model touches nothing else.
+Like the LLM adapter, expected failures come back as a typed EmbedResult and never as an exception.
 
-Rules that carry over from the design:
-- The provider is config (D49) and must be multilingual: documents are English, questions are Arabic / Arabizi / English.
-- Queries arrive already scrubbed (D107); never log text (D108).
-- A failed embedding at chat time means keyword-only search (D51): the caller must check `result.ok`.
+There are two methods on purpose. Some models want different prefixes for documents and for queries
+("passage: " and "query: "), and keeping that inside the adapter means switching models touches nothing else.
+
+Things to keep in mind:
+- The model must be multilingual: documents are English, questions can be Arabic, Arabizi or English.
+- Queries arrive already scrubbed, and text is never logged.
+- A failed embedding at chat time means keyword-only search, so callers must check `result.ok`.
 """
 from __future__ import annotations
 
@@ -29,12 +30,12 @@ from ..llm.models import EMBEDDING_DIMENSIONS, EMBEDDING_MODEL
 
 EmbedStatus = Literal["ok", "timeout", "rate_limited", "bad_output", "unavailable"]
 
-# TODO(عبدالرحمن): البادئات بتتحدد حسب الموديل اللي هنختاره (e5 بيطلب "query: " و "passage: "، غيره لأ).
-#   Hint: بعد ما نختار الموديل، شوف صفحته عند OpenRouter واكتب القيمتين دول.
+# Prefixes for the chosen model. Empty is right for gemini-embedding-001 (it scored well without any).
+# Fill these in if the model is swapped for one that needs them, e.g. e5 wants "query: " and "passage: ".
 QUERY_PREFIX = ""
 DOCUMENT_PREFIX = ""
 
-BATCH_SIZE = 32          # PROPOSAL: texts per HTTP call (ingest sends ~185 chunks, so 6 calls)
+BATCH_SIZE = 32          # texts per HTTP call; indexing the whole corpus takes a handful of calls
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,8 @@ def _fail(status: EmbedStatus, reason: str, latency_s: float = 0.0, **details) -
 
 
 def _unit(v: list[float]) -> list[float]:
-    """Scale to length 1, so cosine similarity = dot product, and the store uses ONE metric (cosine)."""
+    """Scale a vector to length 1. Then cosine similarity is just a dot product, and the whole system
+    uses one metric."""
     n = math.sqrt(sum(x * x for x in v))
     return [x / n for x in v] if n else v
 
@@ -64,11 +66,11 @@ def _unit(v: list[float]) -> list[float]:
 class EmbeddingAdapter(ABC):
     @abstractmethod
     async def embed_documents(self, texts: list[str], timeout_s: float) -> EmbedResult:
-        """Embed policy chunks (ingest). timeout_s applies to each HTTP call."""
+        """Embed policy chunks (used by ingest). timeout_s applies to each HTTP call."""
 
     @abstractmethod
     async def embed_query(self, text: str, timeout_s: float) -> EmbedResult:
-        """Embed one scrubbed user question. vectors has exactly one item."""
+        """Embed one scrubbed user question. `vectors` has exactly one item."""
 
 
 class OpenRouterEmbedder(EmbeddingAdapter):
@@ -80,7 +82,9 @@ class OpenRouterEmbedder(EmbeddingAdapter):
         self._dims = dimensions or settings.embed_dimensions or EMBEDDING_DIMENSIONS
         self._api_key = api_key or settings.openrouter_api_key
         self._base_url = (base_url or settings.llm_base_url).rstrip("/")
-        self._client = client or httpx.AsyncClient(timeout=None)   # the deadline is asyncio.wait_for in _call, not httpx's 5 s default
+        # httpx's own 5 s default would cut calls before our deadline, so it is turned off here.
+        # The deadline is asyncio.wait_for in _call.
+        self._client = client or httpx.AsyncClient(timeout=None)
         self._batch = batch_size
         self._qp = QUERY_PREFIX if query_prefix is None else query_prefix
         self._dp = DOCUMENT_PREFIX if document_prefix is None else document_prefix
@@ -102,7 +106,8 @@ class OpenRouterEmbedder(EmbeddingAdapter):
             return _fail("unavailable", "embedding_not_configured")
         body = {"model": self._model, "input": inputs}
         if self._dims:
-            body["dimensions"] = self._dims        # smaller vectors; the provider re-scales, we re-normalise in _parse
+            # Ask for smaller vectors. The provider rescales them; we normalise again in _parse.
+            body["dimensions"] = self._dims
         start = time.monotonic()
         try:
             resp = await asyncio.wait_for(
@@ -121,7 +126,8 @@ class OpenRouterEmbedder(EmbeddingAdapter):
 
     def _parse(self, resp: httpx.Response, expected: int, latency_s: float) -> EmbedResult:
         try:
-            rows = sorted(resp.json()["data"], key=lambda r: r["index"])      # the API may answer out of order
+            # The API may return rows out of order, so sort by index.
+            rows = sorted(resp.json()["data"], key=lambda r: r["index"])
             vectors = [[float(x) for x in r["embedding"]] for r in rows]
         except (ValueError, KeyError, TypeError):
             return _fail("bad_output", "invalid_response", latency_s)
@@ -132,8 +138,9 @@ class OpenRouterEmbedder(EmbeddingAdapter):
 
 
 class FakeEmbedder(EmbeddingAdapter):
-    """Deterministic bag-of-words vectors: texts that share words are close. No network, no key.
-    Good enough to test ingest / search plumbing; it knows nothing about meaning or Arabic."""
+    """Bag-of-words vectors that are the same every time: texts sharing words end up close together.
+    No network, no key. Good enough to test the ingest and search plumbing, but it knows nothing about
+    meaning or Arabic."""
 
     def __init__(self, dim: int = 64, fail_with: EmbedResult | None = None):
         self.dim = dim

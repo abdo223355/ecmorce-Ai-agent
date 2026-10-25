@@ -1,5 +1,13 @@
 # Progress log (newest first)
 
+## 2026-10-26 (later) — two copies of the code: English comments (GitHub) and an Arabic study copy (local)
+- Request (عبدالرحمن): the repo gets natural English comments; a local copy gets Arabic / English / colloquial comments that explain the code so he can learn it.
+- English copy (novacart-gateway/gateway, goes to GitHub): comments and docstrings rewritten in 20 files (llm/, rag/, evals/, config, main, agent contract, 1 test header). Decision-record wording ("PROPOSAL", "his decision", Arabic TODO markers) removed from the code; the reasons stay in docs/PROGRESS.md. Proven comments-only: the AST of every file (docstrings removed) is identical to the previous commit; 86 tests passed.
+- Study copy (D:ecmorce Ai agent
+ovacart-gateway-study, outside the git repo so it cannot be pushed by accident): same code, Arabic-mix comments that explain ideas from scratch (pool, transaction, JOIN, async, ABC, regex, ...), a one-line [شرح] header in each test file, README_AR.md with a reading order. AST of its 20 source files and 8 test files equals the English copy; 86 tests passed there too.
+- Not covered: Milestone 1 files (identity, backend_client, tools/, backend/) keep their comments; docs (PROGRESS.md, CLAUDE.md, AGENT_ROADMAP.md) are still mixed Arabic/English.
+- Keeping them in sync: code changes happen in the repo; the study copy is refreshed on request.
+
 ## 2026-10-26 — score gate by the D114 method (L1 eval on EVL-RAG-001)
 - Built gateway/evals: build_l1.py parses EVL-RAG-001 into evals/data/l1_evl_rag_001.json and FREEZES the split (per category, sorted by id, every 5th = held-out): 119 questions, tuning 96, held-out 23, BLOCKED-tagged 17. l1_retrieval.py runs retrieval (English question as query and english_query) and sweeps gates on tuning only; --held-out --gate X confirms one gate.
 - retrieve.py: results keep the raw cosine (vector_score, details.best_cosine); SCORE_GATE (None = off) -> mode below_gate with no chunks.

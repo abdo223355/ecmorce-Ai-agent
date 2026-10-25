@@ -1,17 +1,17 @@
-"""Ingest (D47, D48, D105): policy PDFs -> chunks -> embeddings -> pgvector.
+"""Ingest: policy PDFs -> chunks -> embeddings -> pgvector.
 
     python -m app.rag.ingest                # index the corpus
-    python -m app.rag.ingest --dry-run      # only show what would happen: no embedding call, no database write
+    python -m app.rag.ingest --dry-run      # show what would happen; no embedding call, no database write
 
-Runs as an offline job (the indexing "Worker" of D48), not inside a chat request. It needs `pdftotext`
-(poppler) on PATH: the chunker was checked against `pdftotext -layout` output on the whole corpus.
+This is an offline job, not part of a chat request. It needs `pdftotext` (poppler) on the PATH, because
+the chunker was checked against `pdftotext -layout` output for the whole corpus.
 
-What gets indexed (D47, D105):
-- only ACTIVE versions whose Audience names Customers or Delivery Workers;
-- never the Evaluation / Adversarial folders (test questions must not leak into retrieval);
-- never the internal documents in NEVER_INDEX, even if their metadata changes by mistake.
-A SUPERSEDED / DRAFT file is not indexed; if that version is already in the store, its status is updated
-(one row, D48), so it disappears from search at once.
+What gets indexed:
+- only ACTIVE versions whose audience names Customers or Delivery Workers;
+- never the Evaluation or Adversarial folders, so test questions can't leak into retrieval;
+- never the internal documents in NEVER_INDEX, even if their metadata is changed by mistake.
+A SUPERSEDED or DRAFT file is not indexed. If that version is already in the store, its status is updated
+(one row), so it drops out of search immediately.
 """
 from __future__ import annotations
 
@@ -28,11 +28,11 @@ from typing import Callable
 from .chunking import chunk_document, parse_header
 from .embeddings import EmbeddingAdapter, EmbedResult, get_embedder
 
-SKIP_FOLDERS = {"Evaluation", "Adversarial"}                          # D47
-NEVER_INDEX = {"POL-AIS-001", "POL-AGE-001", "POL-AKU-001", "POL-VER-001"}   # internal docs (D47-b, D105)
+SKIP_FOLDERS = {"Evaluation", "Adversarial"}
+NEVER_INDEX = {"POL-AIS-001", "POL-AGE-001", "POL-AKU-001", "POL-VER-001"}   # internal documents
 
-EMBED_TIMEOUT_S = 120.0          # offline job: generous, per HTTP call
-EMBED_ATTEMPTS = 3               # PROPOSAL: retries are fine here; D27 "no live retry" is for chat requests
+EMBED_TIMEOUT_S = 120.0          # generous: this runs offline, and the limit applies per HTTP call
+EMBED_ATTEMPTS = 3               # retrying is fine here; the "no retry" rule is only for live chat requests
 _RETRYABLE = {"timeout", "rate_limited", "unavailable"}
 
 DEFAULT_CORPUS = Path(__file__).resolve().parents[4] / "Rag_files" / "NovaCart_RAG_Corpus"
@@ -68,7 +68,7 @@ async def _embed_with_retry(embedder: EmbeddingAdapter, texts: list[str]) -> Emb
         result = await embedder.embed_documents(texts, EMBED_TIMEOUT_S)
         if result.ok or result.status not in _RETRYABLE:
             return result
-        await asyncio.sleep(2 ** attempt)                  # 1 s, 2 s, 4 s
+        await asyncio.sleep(2 ** attempt)                  # wait 1 s, then 2 s, then 4 s
     return result
 
 
@@ -89,7 +89,7 @@ async def ingest(corpus: Path, embedder: EmbeddingAdapter | None, store, dry_run
         rep.doc_id, rep.version, rep.status = header["doc_id"], header["version"], header["status"]
         parsed.append((rep, chunks))
 
-    # Two ACTIVE versions of the same document: the code must not choose (POL-VER-001); index neither.
+    # If two ACTIVE versions of the same document exist, the code must not pick one, so neither is indexed.
     active = Counter(r.doc_id for r, _ in parsed if r.status == "ACTIVE")
 
     for rep, chunks in parsed:
@@ -140,7 +140,7 @@ async def _main(args) -> int:
     if args.dry_run:
         reports = await ingest(corpus, None, None, dry_run=True)
     else:
-        store = PolicyStore(statement_timeout_ms=60_000)                  # offline job: no 1 s chat limit
+        store = PolicyStore(statement_timeout_ms=60_000)                  # no 1 s chat limit for an offline job
         try:
             await store.open(wait=True, timeout=10)
         except Exception as e:
@@ -158,7 +158,7 @@ async def _main(args) -> int:
 
 
 if __name__ == "__main__":
-    if sys.platform == "win32":          # psycopg async cannot use the Windows default event loop
+    if sys.platform == "win32":          # psycopg's async mode can't use the default event loop on Windows
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     parser = argparse.ArgumentParser(description="Index the NovaCart policy PDFs into pgvector.")
     parser.add_argument("--corpus", default=os.getenv("RAG_CORPUS_DIR", str(DEFAULT_CORPUS)))

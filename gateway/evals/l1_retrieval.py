@@ -1,22 +1,22 @@
-"""L1 retrieval eval (D114) and the score-gate sweep.
+"""L1 retrieval eval and the score-gate sweep.
 
-    python -m evals.l1_retrieval                          # tuning split: metrics + sweep -> proposed gate
+    python -m evals.l1_retrieval                          # tuning split: metrics, sweep, proposed gate
     python -m evals.l1_retrieval --held-out --gate 0.62   # held-out: confirm ONE fixed gate, once, no sweep
 
-D114:
-- correct document in the top 5 >= 90% of non-BLOCKED questions (soft);
-- a document closed for the role / SUPERSEDED / DRAFT as main evidence = 0 (hard);
-- score gate: sweep candidate gates on the tuning split, pick the one with the most correct answers + correct
-  abstentions, confirm once on the held-out, never tune on it.
+Targets:
+- the right document is in the top 5 for at least 90% of questions (a soft target);
+- a document closed to the role, or a SUPERSEDED / DRAFT one, is never the main evidence (a hard rule);
+- the score gate is picked by sweeping candidates on the tuning split, keeping the one with the most correct
+  answers plus correct abstentions, then confirming it once on the held-out split. It is never tuned on it.
 
-Per question, with gate g on the best cosine of the vector search:
-- answerable = at least one expected document is indexed and visible for that role;
-- answerable and best >= g and an expected doc in the top 5  -> correct answer
-- answerable and best <  g                                    -> wrong abstention (a human gets a question we could answer)
-- not answerable and best < g                                 -> correct abstention
-- everything else                                             -> wrong answer
-The questions are English (EVL-RAG-001), so they are passed as both query and english_query (hybrid), as
-classify would do for an English message. Document level only: sections are not scored here.
+How a question is judged for a given gate g, using the best cosine score from the vector search:
+- answerable means at least one expected document is indexed and visible to that role;
+- answerable, best >= g and an expected document in the top 5   -> correct answer
+- answerable, best <  g                                          -> wrong abstention (a human gets a question we could answer)
+- not answerable, best < g                                       -> correct abstention
+- anything else                                                  -> wrong answer
+The questions in EVL-RAG-001 are English, so each one is passed as both the query and the english_query
+(hybrid search), the way classify would handle an English message. Scoring is per document, not per section.
 """
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def judge(rows: list[Row], gate: float) -> Counter:
 
 def sweep(rows: list[Row]) -> list[tuple[float, Counter]]:
     bests = sorted({round(r.best, 3) for r in rows if r.best is not None})
-    candidates = [0.0] + bests                      # 0.0 = no gate; each best score = "everything below it abstains"
+    candidates = [0.0] + bests                      # 0.0 means no gate; each best score means "everything below it abstains"
     return [(g, judge(rows, g)) for g in candidates]
 
 

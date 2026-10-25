@@ -33,9 +33,11 @@ class BoundTools:
         self._prefetch: tuple[str, asyncio.Task] | None = None
 
     def prefetch_embedding(self, text: str) -> None:
-        """Early embedding (option أ): start embedding the user message now, in parallel with classify.
-        Cost accepted: every message goes to the embedding vendor, also the ones that need no policy (D105).
-        Until the ingress scrub exists (D107, Milestone 2) this text is NOT scrubbed: synthetic data only (D111)."""
+        """Start embedding the user message now, in parallel with classify, so the embedding call hides behind it.
+
+        The cost is that every message goes to the embedding vendor, including ones that need no policy.
+        The ingress scrub (Milestone 2) doesn't exist yet, so the text is not scrubbed: use synthetic data only.
+        """
         if self._embedder is None:
             return
         timeout = min(retrieve.PREFETCH_TIMEOUT_S, self._d.remaining() - settings.reserve_after_backend_s)
@@ -43,7 +45,7 @@ class BoundTools:
             self._prefetch = (text, asyncio.create_task(self._embedder.embed_query(text, timeout_s=timeout)))
 
     def close(self) -> None:
-        """End of the request: stop an early embedding nobody used."""
+        """Called at the end of a request: cancel an early embedding that nobody used."""
         if self._prefetch and not self._prefetch[1].done():
             self._prefetch[1].cancel()
 
@@ -69,12 +71,12 @@ class BoundTools:
         return await self._rag("worker", "delivery_workers", query, english_query)
 
     async def _rag(self, role: str, audience: str, query: str, english_query: str | None):
-        """The audience comes from the verified token's role, never from the agent (D1, D47)."""
+        """The audience comes from the verified token's role, never from the agent."""
         if self._id.role != role:
             return ToolResult("denied", reason="wrong_role")
         if self._store is None or self._embedder is None:
             return ToolResult("unavailable", reason="policy_store_not_configured")
-        # The early embedding is only valid for the exact text it was made from.
+        # The early embedding only applies to the exact text it was made from.
         task = self._prefetch[1] if self._prefetch and self._prefetch[0] == query else None
         return await retrieve.search(query, audience, self._d, self._store, self._embedder, english_query,
                                      prefetched=task)
@@ -88,8 +90,8 @@ class ChatIn(BaseModel):
 async def lifespan(app: FastAPI):
     app.state.backend = BackendClient()
     app.state.jwks = JwksCache(settings.jwks_url)
-    # Policy store (D48): opened without waiting, so the Gateway starts even if the DB is late;
-    # a search while it is down returns ToolResult("unavailable") instead of crashing.
+    # Open the policy store without waiting, so the Gateway still starts if the database is late.
+    # A search while it is down returns ToolResult("unavailable") instead of crashing.
     app.state.store = PolicyStore()
     await app.state.store.open()
     app.state.embedder = get_embedder()
@@ -127,7 +129,7 @@ async def chat(body: ChatIn, authorization: str | None = Header(default=None)):
     ctx = AgentContext(role=identity.role, message=body.message,  # TODO M2: scrub at ingress (D107)
                        chat_id=f"{identity.subject_id}:{identity.session_id}",
                        remaining_s=deadline.remaining())
-    tools.prefetch_embedding(ctx.message)        # same text the agent passes as `query` to policy_search
+    tools.prefetch_embedding(ctx.message)        # the agent passes this same text as `query` to policy_search
     try:
         result = await run_agent(ctx, tools)
     except NotImplementedError:
@@ -151,7 +153,7 @@ if os.getenv("DEV_TOOLS", "1") == "1":
             "order_details": lambda: t.order_details(arg or ""),
             "my_shipments_today": lambda: t.my_shipments_today(arg or "list"),
             "shipment_details": lambda: t.shipment_details(arg or "", (fields or "").split(",") if fields else []),
-            "policy_search": lambda: t.policy_search(arg or "", en),          # ?arg=<question>&en=<english query>
+            "policy_search": lambda: t.policy_search(arg or "", en),          # ?arg=<question>&en=<English query>
             "procedure_search": lambda: t.procedure_search(arg or "", en),
         }
         if name not in calls:

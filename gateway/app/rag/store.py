@@ -1,15 +1,16 @@
-"""Policy store (D48): pgvector inside the Gateway PostgreSQL.
+"""Policy store: pgvector inside the Gateway PostgreSQL.
 
 Two tables:
-- policy_versions: ONE row per (doc_id, version). The status (ACTIVE / SUPERSEDED / DRAFT) and the audience
-  live here, and only here. Changing a status is one UPDATE of one row.
-- policy_chunks: the sections. Each row points to its version by version_id and holds the embedding.
+- policy_versions has one row per (doc_id, version). The status (ACTIVE / SUPERSEDED / DRAFT) and the
+  audience live here and nowhere else, so changing a status is a single UPDATE of a single row.
+- policy_chunks holds the sections. Each row points at its version by version_id and carries the embedding.
 
-Search always JOINs the two tables and filters on the VERSION row, never on a status copy inside a chunk
-(D48 "avoids drift"). Re-indexing a version replaces all of its chunks inside ONE transaction, together with
-indexing_status = DONE (D48 / D14-8): either the whole new version is there, or the old one stays untouched.
+Searches always JOIN the two tables and filter on the version row, never on a copy of the status stored on
+the chunk. A copy could drift out of sync if an update stopped half way. Re-indexing a version replaces all
+its chunks in one transaction and flips indexing_status to DONE at the end: the new version is either fully
+there or the old one is left untouched.
 
-Database errors are raised, not hidden: retrieve.py turns them into ToolResult("unavailable") for the agent.
+Database errors are raised, not swallowed. retrieve.py turns them into ToolResult("unavailable").
 """
 from __future__ import annotations
 
@@ -59,8 +60,8 @@ CREATE TABLE IF NOT EXISTS policy_chunks (
 
 CREATE INDEX IF NOT EXISTS policy_chunks_tsv ON policy_chunks USING gin (tsv);
 """
-# No vector index yet: with ~130 chunks an exact scan is instant. Add HNSW (vector_cosine_ops) when it grows;
-# it works because 768 < 2000 dimensions (pgvector's index limit).
+# There is no vector index yet: with about 130 chunks an exact scan is instant. Once the table grows, add an
+# HNSW index (vector_cosine_ops). It will work because 768 is under pgvector's 2000-dimension index limit.
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ class Hit:
     part: int
     title: str
     text: str
-    score: float           # vector search: cosine similarity (1 = same direction); keyword search: ts_rank_cd
+    score: float           # vector search: cosine similarity (1 means same direction); keyword search: ts_rank_cd
 
     @property
     def cited(self) -> str:
@@ -79,12 +80,12 @@ class Hit:
 
 
 def to_vector_literal(v: list[float]) -> str:
-    """pgvector accepts '[0.1,0.2,...]' cast to ::vector. Keeps us free of an extra driver package."""
+    """pgvector reads '[0.1,0.2,...]' cast to ::vector, so we don't need an extra driver package."""
     return "[" + ",".join(repr(float(x)) for x in v) + "]"
 
 
 def plain_dsn(url: str) -> str:
-    """'postgresql+psycopg://...' (SQLAlchemy style in docker-compose) -> 'postgresql://...' for psycopg."""
+    """Turn 'postgresql+psycopg://...' (the SQLAlchemy style used in docker-compose) into 'postgresql://...'."""
     return re.sub(r"^postgresql\+\w+://", "postgresql://", url)
 
 
@@ -97,14 +98,14 @@ class PolicyStore:
         self.schema = schema
         self.dims = dims
         timeout = settings.rag_statement_timeout_ms if statement_timeout_ms is None else statement_timeout_ms
-        # Own pool + statement timeout (D48): retrieval never waits behind audit / queue writes.
+        # Retrieval gets its own pool and statement timeout so it never waits behind audit or queue writes.
         self._pool = AsyncConnectionPool(
             plain_dsn(dsn or settings.gateway_database_url), min_size=1, max_size=max_size, open=False,
             kwargs={"options": f"-c statement_timeout={timeout} -c search_path={schema},public",
                     "autocommit": True})
 
     async def open(self, wait: bool = False, timeout: float = 30.0) -> None:
-        """wait=True: fail now (within `timeout`) if the database cannot be reached, instead of on the first query."""
+        """With wait=True, fail within `timeout` if the database can't be reached, instead of on the first query."""
         await self._pool.open(wait=wait, timeout=timeout)
 
     async def close(self) -> None:
@@ -123,15 +124,18 @@ class PolicyStore:
             await conn.execute(_ddl(self.dims))
 
     async def drop_schema(self) -> None:
-        """Tests only: never call this on 'public'."""
+        """For tests only. Refuses to touch 'public'."""
         if self.schema == "public":
             raise ValueError("refusing to drop the public schema")
         async with self._pool.connection() as conn:
             await conn.execute(f"DROP SCHEMA IF EXISTS {self.schema} CASCADE")
 
     async def replace_version(self, chunks: list[Chunk], vectors: list[list[float]], model_id: str) -> int:
-        """Write ONE document version: its version row + all its chunks, in one transaction.
-        Old chunks of that version are deleted first, so re-running ingest never duplicates. Returns version_id."""
+        """Write one document version, its version row plus all its chunks, in a single transaction.
+
+        The version's old chunks are deleted first, so running ingest again never creates duplicates.
+        Returns the version_id.
+        """
         if not chunks or len(chunks) != len(vectors):
             raise ValueError("need one vector per chunk")
         first = chunks[0]
@@ -166,7 +170,7 @@ class PolicyStore:
         return version_id
 
     async def set_status(self, doc_id: str, version: str, status: str) -> bool:
-        """One UPDATE of one row: every chunk of that version changes with it. False = no such version."""
+        """Update one row; every chunk of that version follows it. Returns False if there is no such version."""
         async with self._pool.connection() as conn:
             cur = await conn.execute(
                 "UPDATE policy_versions SET status = %s, updated_at = now() WHERE doc_id = %s AND version = %s",
@@ -178,8 +182,11 @@ class PolicyStore:
 
     async def search_vectors(self, query_vector: list[float], audience: str, model_id: str, k: int = 5,
                              allow_doc_ids: tuple[str, ...] = ()) -> list[Hit]:
-        """Nearest chunks by cosine, only from ACTIVE, fully indexed versions the audience may see
-        (+ by-name allow-list, D47-a), and only vectors made by the same model (no mixing after a model change)."""
+        """Nearest chunks by cosine similarity.
+
+        Only ACTIVE, fully indexed versions the audience may see are considered (plus the allow-list by
+        name), and only vectors made by the same model, so a model change can't mix two vector spaces.
+        """
         if len(query_vector) != self.dims:
             raise ValueError(f"query vector must have {self.dims} numbers")
         sql = f"""SELECT v.doc_id, v.version, c.section, c.part, c.title, c.text,
@@ -193,10 +200,12 @@ class PolicyStore:
 
     async def search_keywords(self, query_text: str, audience: str, k: int = 5,
                               allow_doc_ids: tuple[str, ...] = ()) -> list[Hit]:
-        """PostgreSQL full-text search on the ENGLISH search query (D51, D53). Also the fallback when the
-        embedding provider is down (D49): it needs no external call.
-        ANY word may match (OR), and chunks matching more words rank higher. With AND, "return window shirt"
-        missed the Return Window section because it never says "shirt" (found in the real-corpus check)."""
+        """PostgreSQL full-text search on the English search query.
+
+        It needs no external call, so it is also what we fall back to when the embedding provider is down.
+        Any word may match (OR) and chunks matching more words rank higher. With AND, "return window shirt"
+        missed the Return Window section because that section never says "shirt".
+        """
         sql = f"""SELECT v.doc_id, v.version, c.section, c.part, c.title, c.text,
                          ts_rank_cd(c.tsv, t.q) AS score
                   FROM policy_chunks c JOIN policy_versions v ON v.version_id = c.version_id,
@@ -209,7 +218,7 @@ class PolicyStore:
                                       "allow": list(allow_doc_ids), "k": k})
 
     async def active_docs(self) -> dict[str, tuple[str, ...]]:
-        """doc_id -> audience of every ACTIVE, fully indexed version (used by the evals to know what a role may see)."""
+        """Map doc_id to its audience for every ACTIVE, fully indexed version. The evals use it to know what a role may see."""
         async with self._pool.connection() as conn:
             rows = await (await conn.execute(
                 "SELECT doc_id, audience FROM policy_versions WHERE status = 'ACTIVE' AND indexing_status = 'DONE'"

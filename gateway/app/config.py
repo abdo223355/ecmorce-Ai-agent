@@ -17,14 +17,15 @@ class Settings:
     backend_max_retries: int = 2                                           # POL-BDR-001
     backend_backoffs_s: tuple[float, ...] = (1.0, 2.0)                     # POL-BDR-001
     reserve_after_backend_s: float = 2.2   # reply 1.5 + margin 0.5 + validate 0.2 (fix 1)
-    # Model adapter (D27 / D71): per-node model names live in llm/models.py; final choice = Step 9 bake-off.
+    # LLM and embeddings. Per-node model names live in llm/models.py; the env vars below override them.
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
-    llm_model: str = os.getenv("LLM_MODEL", "")   # optional override for every node (quick tests)
-    embed_model: str = os.getenv("EMBED_MODEL", "")   # overrides llm/models.py EMBEDDING_MODEL
-    embed_dimensions: int = int(os.getenv("EMBED_DIMENSIONS", "0"))   # 0 = the model's full size
-    # Policy store (D48): Gateway DB + its own statement timeout. 1000 ms is a PROPOSAL inside the
-    # 1.5 s backend + RAG budget (D91); tune from the load test.
-    gateway_database_url: str = os.getenv("GATEWAY_DATABASE_URL", "postgresql://gateway:gateway@127.0.0.1:5433/gateway")  # 127.0.0.1, not localhost: on Windows localhost tries IPv6 first
+    llm_model: str = os.getenv("LLM_MODEL", "")   # one model for every node, handy for quick tests
+    embed_model: str = os.getenv("EMBED_MODEL", "")   # overrides EMBEDDING_MODEL in llm/models.py
+    embed_dimensions: int = int(os.getenv("EMBED_DIMENSIONS", "0"))   # 0 means use the default size
+    # Policy store: the Gateway database, with its own statement timeout. 1000 ms is a starting value that
+    # fits inside the 1.5 s backend + RAG window; adjust it after load testing.
+    # The default host is 127.0.0.1 rather than localhost: on Windows localhost tries IPv6 first.
+    gateway_database_url: str = os.getenv("GATEWAY_DATABASE_URL", "postgresql://gateway:gateway@127.0.0.1:5433/gateway")
     rag_statement_timeout_ms: int = int(os.getenv("RAG_STATEMENT_TIMEOUT_MS", "1000"))
     llm_base_url: str = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
     recent_orders_limit: int = int(os.getenv("RECENT_ORDERS_LIMIT", "5"))

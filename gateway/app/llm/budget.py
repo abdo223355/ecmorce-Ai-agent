@@ -1,14 +1,17 @@
-"""LLM timeout per node (D91 caps, D92 margin + minimum windows). All numbers are the design's INITIAL values."""
+"""Time limits for LLM calls, per node. The numbers are the design's starting values (D91, D92)."""
 from __future__ import annotations
 
-MARGIN_S = 0.5                                        # D92
-CAP_S = {"classify": 1.0, "reply": 2.0}               # D91 / Step 2+3 fix 2
-MIN_WINDOW_S = {"classify": 0.8, "reply": 1.5}        # D92: below this, do not call the LLM
+MARGIN_S = 0.5                                        # safety margin kept free at the end of the request
+CAP_S = {"classify": 1.0, "reply": 2.0}               # longest a node may wait
+MIN_WINDOW_S = {"classify": 0.8, "reply": 1.5}        # below this there is no point calling the model
 
 
 def timeout_for(node: str, remaining_s: float, reserve_s: float = 0.0) -> float | None:
-    """timeout = min(node cap, remaining - margin - reserve). None = below the minimum window:
-    the caller must use the template / handoff / code classifier instead of calling the LLM.
-    reserve_s = minimum windows of the REQUIRED later steps (e.g. classify reserves reply 1.5 + validate 0.2)."""
+    """How long this node may wait: min(node cap, remaining - margin - reserve).
+
+    Returns None when what is left is under the node's minimum window. The caller should then use a
+    template, a handoff or the code classifier instead of calling the model.
+    reserve_s is for later steps that still need time (classify, for example, has to leave room for the reply).
+    """
     t = min(CAP_S[node], remaining_s - MARGIN_S - reserve_s)
     return t if t >= MIN_WINDOW_S[node] else None

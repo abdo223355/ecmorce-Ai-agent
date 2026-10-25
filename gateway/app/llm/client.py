@@ -1,8 +1,8 @@
-"""The ONLY thing the agent nodes import from llm/.
+"""The only thing the agent nodes need to import from llm/.
 
     from app.llm.client import ask
     result = await ask("classify", prompt, MySchema, remaining_s=ctx.remaining_s, system=SYSTEM_PROMPT)
-    if not result.ok: ...   # timeout / rate_limited / bad_output / unavailable -> fallback chain (D27)
+    if not result.ok: ...   # timeout / rate_limited / bad_output / unavailable -> fallback chain
     result.data             # a MySchema instance
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ from .budget import timeout_for
 from .errors import failure
 from .openrouter import OpenRouterAdapter
 
-_override: LLMAdapter | None = None   # tests / offline runs: set_adapter(FakeAdapter(...))
+_override: LLMAdapter | None = None   # tests and offline runs: set_adapter(FakeAdapter(...))
 
 
 def set_adapter(adapter: LLMAdapter | None) -> None:
@@ -28,7 +28,8 @@ def set_adapter(adapter: LLMAdapter | None) -> None:
 
 @lru_cache(maxsize=1)
 def _http() -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=None)   # one shared connection pool; deadlines come from budget.py via wait_for
+    # One shared connection pool. No httpx timeout: the deadline comes from budget.py through wait_for.
+    return httpx.AsyncClient(timeout=None)
 
 
 @lru_cache(maxsize=None)
@@ -42,8 +43,8 @@ def get_llm(node: str) -> LLMAdapter:
 
 async def ask(node: str, prompt: str, schema: type[BaseModel], remaining_s: float,
               system: str | None = None, reserve_s: float = 0.0) -> LLMResult:
-    """Pick the node's model, compute the timeout (D92), call once (no retry, D27)."""
+    """Pick the node's model, work out the timeout, and call it once (no retry)."""
     timeout_s = timeout_for(node, remaining_s, reserve_s)
     if timeout_s is None:
-        return failure("timeout", "below_minimum_window")      # no call made
+        return failure("timeout", "below_minimum_window")      # not enough time, so no call is made
     return await get_llm(node).generate(prompt, schema, timeout_s, system)

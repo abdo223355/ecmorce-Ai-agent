@@ -1,14 +1,14 @@
-"""Model adapter (D27 / D100) — the ONLY place that talks to the LLM provider (OpenRouter).
+"""LLM adapter: the single place that talks to the model provider (OpenRouter).
 
-Same pattern as ToolResult: expected LLM failures come back as a typed result, never as a raw
-exception to the agent. Real bugs in our own code stay normal exceptions.
+It follows the same pattern as ToolResult. Failures we expect (timeout, rate limit, bad JSON) come back as
+a typed result instead of an exception, so the agent never has to catch provider-specific errors.
+Real bugs in our own code are still ordinary exceptions.
 
-Design rules (docs/design/Phase4_Step8_Model_Cost.md D71, Phase 5 D92):
-- The timeout is remaining time - margin. The CALLER computes it and passes it in.
-- The adapter NEVER re-sends a request (D27 "no live retry"). A failure goes up; the fallback chain
-  (template / handoff) is the retry.
-- No identity, token, customer_id or worker_id is ever sent to the model (D2, D27).
-- Never log prompt or reply text (D108).
+Rules this module sticks to (see docs/design, D27 / D71 / D92):
+- The caller works out the timeout (remaining time minus a margin) and passes it in.
+- No retry inside the adapter. A failure goes up and the fallback chain (template, handoff) takes over.
+- Identity, tokens and customer or worker ids are never sent to the model.
+- Prompt and reply text are never logged.
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class LLMResult:
 
 
 class LLMAdapter(ABC):
-    """The interface every node depends on. The OpenRouter adapter and the test fake both implement it."""
+    """What the agent nodes depend on. Both the OpenRouter adapter and the test fake implement it."""
 
     @abstractmethod
     async def generate(
@@ -46,9 +46,10 @@ class LLMAdapter(ABC):
     ) -> LLMResult:
         """Ask the model for structured output.
 
-        prompt     user-side text (already scrubbed; user text sits inside delimiters, D56)
+        prompt     the user-side text (already scrubbed, user text sits inside delimiters)
         schema     pydantic model the answer must match; on success result.data is an instance of it
-        timeout_s  hard limit for this one call (remaining time - margin, D92)
+        timeout_s  hard limit for this one call
         system     optional system prompt
-        Never raises for expected failures: returns LLMResult(status != "ok", reason=...).
+
+        Expected failures never raise: they return LLMResult(status != "ok", reason=...).
         """

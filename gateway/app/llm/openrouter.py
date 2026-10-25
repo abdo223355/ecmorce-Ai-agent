@@ -1,4 +1,4 @@
-"""OpenRouter adapter (D27). One HTTP call per generate(); never retries (the fallback chain is the retry)."""
+"""OpenRouter adapter. One HTTP call per generate() and no retry: the fallback chain does the retrying."""
 from __future__ import annotations
 
 import asyncio
@@ -18,7 +18,8 @@ class OpenRouterAdapter(LLMAdapter):
         self._model = model or settings.llm_model
         self._api_key = api_key or settings.openrouter_api_key
         self._base_url = (base_url or settings.llm_base_url).rstrip("/")
-        self._client = client or httpx.AsyncClient(timeout=None)   # the deadline is asyncio.wait_for below, not httpx's 5 s default
+        # httpx has its own 5 s default timeout, which would cut calls before our deadline. Turn it off.
+        self._client = client or httpx.AsyncClient(timeout=None)
 
     async def generate(self, prompt: str, schema: type[BaseModel], timeout_s: float,
                        system: str | None = None) -> LLMResult:
@@ -35,7 +36,7 @@ class OpenRouterAdapter(LLMAdapter):
         }
         start = time.monotonic()
         try:
-            # One total deadline for the whole call (connect + send + wait + read).
+            # One deadline for the whole call: connect, send, wait and read.
             resp = await asyncio.wait_for(
                 self._client.post(f"{self._base_url}/chat/completions", json=body,
                                   headers={"Authorization": f"Bearer {self._api_key}"}),
@@ -56,7 +57,7 @@ class OpenRouterAdapter(LLMAdapter):
             payload = resp.json()
             content = payload["choices"][0]["message"]["content"]
             data = schema.model_validate_json(content)
-        except (ValueError, KeyError, IndexError, TypeError):   # pydantic ValidationError is a ValueError
+        except (ValueError, KeyError, IndexError, TypeError):   # pydantic's ValidationError is a ValueError
             return failure("bad_output", "invalid_json_or_schema", latency_s)
         usage = payload.get("usage") or {}
         return LLMResult("ok", data=data, details={
