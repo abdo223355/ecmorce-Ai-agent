@@ -208,6 +208,14 @@ class PolicyStore:
         return await self._hits(sql, {"text": query_text, "audience": audience,
                                       "allow": list(allow_doc_ids), "k": k})
 
+    async def active_docs(self) -> dict[str, tuple[str, ...]]:
+        """doc_id -> audience of every ACTIVE, fully indexed version (used by the evals to know what a role may see)."""
+        async with self._pool.connection() as conn:
+            rows = await (await conn.execute(
+                "SELECT doc_id, audience FROM policy_versions WHERE status = 'ACTIVE' AND indexing_status = 'DONE'"
+            )).fetchall()
+        return {doc_id: tuple(aud) for doc_id, aud in rows}
+
     async def counts(self) -> dict:
         async with self._pool.connection() as conn:
             rows = await (await conn.execute(

@@ -1,5 +1,17 @@
 # Progress log (newest first)
 
+## 2026-10-26 — score gate by the D114 method (L1 eval on EVL-RAG-001)
+- Built gateway/evals: build_l1.py parses EVL-RAG-001 into evals/data/l1_evl_rag_001.json and FREEZES the split (per category, sorted by id, every 5th = held-out): 119 questions, tuning 96, held-out 23, BLOCKED-tagged 17. l1_retrieval.py runs retrieval (English question as query and english_query) and sweeps gates on tuning only; --held-out --gate X confirms one gate.
+- retrieve.py: results keep the raw cosine (vector_score, details.best_cosine); SCORE_GATE (None = off) -> mode below_gate with no chunks.
+- TUNING (96): answerable 89, hit@5 89/89 = 100% (non-BLOCKED 77/77); top-1 closed for the role = 0 (hard rule OK). Sweep: no gate (0.0) wins: 89 correct answers + 0 abstentions; any gate loses more correct answers than it gains abstentions, because the 7 not-answerable questions score 0.59-0.67, inside the range of answerable ones.
+- HELD-OUT (23, run once with gate 0.0): hit@5 18/21 = 86% (non-BLOCKED 14/17 = 82%), BELOW the 90% soft target; hard rule OK (0). Misses Q060, Q076, Q114: all ask about system internals whose main evidence is in docs closed to customers (POL-BDR-001, POL-VER-001, POL-AGE-001); the design routes such questions to D34 templates, not retrieval. Also 1 embedding timeout (Q045) in the run. Tuning 100% vs held-out 86% = the tuning number was optimistic.
+- FINDING: Q009 "What are your support hours on Friday?" (customer) expects POL-BUS-001, whose Audience is Customer Service + Delivery Workers, so customers cannot get it (not in the allow-list). A design gap for the Policy Office / allow-list, not a code bug.
+- DECISION (عبدالرحمن, 2026-10-26): no score gate (SCORE_GATE = None), as chosen by the D114 sweep. Re-run evals/l1_retrieval.py when the corpus or the embedding model changes. Open for him: what BLOCKED means now that 6 of the 7 BLOCKED docs are in the corpus and indexed.
+- DECISION (عبدالرحمن, 2026-10-26): nothing is BLOCKED any more. All 7 documents named by Step 9 are in the corpus. evals/build_l1.py: BLOCKED_DOCS is now empty; the set was rebuilt with --force and checked: same 119 questions, same split (96 / 23), same expected docs, blocked 17 -> 0. A question whose expected docs are not visible for its role (e.g. POL-COM-001, internal audience) is scored as "not answerable" (abstention), not skipped.
+- Effect on the numbers (no re-run, the held-out was not looked at a second time): D114 retrieval figure is now the all-answerable one. Tuning 89/89 = 100%; held-out 18/21 = 86%, still below the 90% soft target. The earlier "non-BLOCKED 82%" is retired.
+- Design doc docs/design/Phase4_Step9_Evaluation.md still describes BLOCKED as a rule; it was NOT edited (design files change only with him).
+- Tests: 86 passed.
+
 ## 2026-10-25 (night, later) — embedding latency: early embedding
 - Measured INSIDE the gateway container (32 calls): query embedding p50 1.10 s, p95 1.17 s, first (cold) call 1.50 s. So about 75% of the 1.5 s RAG window (D91) before any search.
 - DECISION (عبدالرحمن), option أ: early embedding. /chat starts embedding the user message when it arrives, in parallel with classify (BoundTools.prefetch_embedding); policy_search / procedure_search reuse it only when query is the exact same text; retrieve waits for it at most the RAG window (shield, then fallback); BoundTools.close() cancels an unused one. PREFETCH_TIMEOUT_S = 2.5 (classify cap 1.0 + window 1.5, PROPOSAL). Agent contract unchanged.

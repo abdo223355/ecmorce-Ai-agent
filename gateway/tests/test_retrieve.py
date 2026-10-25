@@ -170,3 +170,23 @@ def test_slow_prefetch_is_not_waited_for_past_the_window(monkeypatch):
     r, alive = run(go())
     assert r.data == [] and r.details["mode"] == "no_retrieval" and r.details["embedding"] == "timeout"
     assert alive
+
+
+# ---------- score gate (D94 / D114) ----------
+
+def test_vector_score_is_the_raw_cosine_and_none_for_keyword_only_chunks():
+    store = FakeStore(vector=[hit("2", score=0.71)], keyword=[hit("7")])
+    r = run(retrieve.search("q", "customers", Deadline(8.0), store, FakeEmbedder(), english_query="q"))
+    by_section = {d["section"]: d for d in r.data}
+    assert by_section["2"]["vector_score"] == 0.71 and by_section["7"]["vector_score"] is None
+    assert r.details["best_cosine"] == 0.71
+
+
+def test_gate_off_by_default_and_blocks_weak_matches_when_set(monkeypatch):
+    weak = FakeStore(vector=[hit("2", score=0.40)])
+    assert run(retrieve.search("q", "customers", Deadline(8.0), weak, FakeEmbedder())).data      # off: answered
+    monkeypatch.setattr(retrieve, "SCORE_GATE", 0.6)
+    r = run(retrieve.search("q", "customers", Deadline(8.0), weak, FakeEmbedder()))
+    assert r.data == [] and r.details["mode"] == "below_gate" and r.details["gate"] == 0.6
+    strong = FakeStore(vector=[hit("2", score=0.80)])
+    assert run(retrieve.search("q", "customers", Deadline(8.0), strong, FakeEmbedder())).data[0]["section"] == "2"

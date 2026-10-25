@@ -34,6 +34,13 @@ RAG_WINDOW_S = 1.5                          # D91: backend + RAG in parallel <= 
 MIN_WINDOW_S = 0.3                          # PROPOSAL: below this, do not start a search at all
 RRF_K = 60                                  # PROPOSAL: the usual RRF constant
 CUSTOMER_ALLOW_LIST = ("POL-SPC-001",)      # D47-a: shown to customers by name
+# Score gate (D94 / D114): if the best COSINE similarity of the vector search is below it, the agent gets no
+# chunks (it hands off instead of answering from a weak match). None = off. It is chosen by evals/l1_retrieval.py
+# on the tuning split and confirmed once on the held-out, never guessed. RRF scores cannot be gated: rank-based.
+# DECISION (عبدالرحمن, 2026-10-26): no gate. The D114 sweep on 96 tuning questions picked 0.0: the questions with
+# no allowed answer scored 0.59-0.67, inside the range of answerable ones, so any gate lost more correct answers
+# than it gained abstentions. Re-run evals/l1_retrieval.py when the corpus or the embedding model changes.
+SCORE_GATE: float | None = None
 # Early embedding (decision by عبدالرحمن, option أ): /chat starts embedding the user message when it arrives, in
 # parallel with classify. Its timeout covers classify (cap 1.0 s, D92) + the RAG window (1.5 s). PROPOSAL.
 PREFETCH_TIMEOUT_S = 2.5
@@ -101,9 +108,13 @@ def fuse(vector_hits: list[Hit], keyword_hits: list[Hit], k: int = TOP_K) -> lis
     return [(first_seen[key], scores[key]) for key in ordered]
 
 
-def _to_result(pairs: list[tuple[Hit, float]], details: dict) -> ToolResult:
+def _to_result(pairs: list[tuple[Hit, float]], details: dict, cosine: dict | None = None) -> ToolResult:
+    """score = the ranking score (RRF or ts_rank). vector_score = the raw cosine of that chunk when the vector
+    search found it (None otherwise): the score gate and later evals need a real similarity, not a rank."""
+    cosine = cosine or {}
     data = [{"doc_id": h.doc_id, "version": h.version, "section": h.section, "part": h.part, "title": h.title,
-             "text": h.text, "score": round(s, 4), "cited": h.cited} for h, s in pairs]
+             "text": h.text, "score": round(s, 4), "vector_score": cosine.get(_key(h)), "cited": h.cited}
+            for h, s in pairs]
     return ToolResult("ok", data=data, details=details)
 
 
@@ -146,7 +157,11 @@ async def search(question: str, audience: str, deadline: Deadline, store: Policy
                                                  allow_doc_ids=allow)
     except (DatabaseError, PoolTimeout) as e:
         return ToolResult("unavailable", reason="policy_store_error", details={"error": type(e).__name__})
-    pairs = fuse(vector_hits, keyword_hits)
-    return _to_result(pairs, {"mode": "hybrid" if english_query else "vector_only",
-                              "latency_s": round(time.monotonic() - start, 3),
-                              "vector_hits": len(vector_hits), "keyword_hits": len(keyword_hits)})
+    best = vector_hits[0].score if vector_hits else None
+    details = {"mode": "hybrid" if english_query else "vector_only", "best_cosine": best,
+               "latency_s": round(time.monotonic() - start, 3),
+               "vector_hits": len(vector_hits), "keyword_hits": len(keyword_hits)}
+    if SCORE_GATE is not None and (best is None or best < SCORE_GATE):
+        return _to_result([], {**details, "mode": "below_gate", "gate": SCORE_GATE})
+    cosine = {_key(h): round(h.score, 4) for h in vector_hits}
+    return _to_result(fuse(vector_hits, keyword_hits), details, cosine)
