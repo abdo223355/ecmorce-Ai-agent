@@ -13,10 +13,13 @@ found and fixed, with numbers.
 
 ## How it was built
 
-Abdelrahman designed the project and directed the work: the idea, the phases and design decisions, the prompts,
-the test data and the evaluation sets. He chose what to build, reviewed the results and decided what to change.
-**Claude Code (Anthropic's coding assistant) helped write the code** from those instructions, and the code was
-run, measured and corrected against real messages before it was kept.
+Abdelrahman owns the software architecture and the system design: the idea, the phases, the design decisions,
+the prompts, the test data and the evaluation sets. He decided what to build and how it should work, reviewed the
+results, and decided what to change.
+
+**Claude Code (Anthropic's coding assistant) was his assistant on the project.** It wrote the code and drafts of
+the documents from his instructions. The code was then run, measured and corrected against real messages before it
+was kept.
 
 ## Demo
 
