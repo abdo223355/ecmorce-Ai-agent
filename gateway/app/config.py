@@ -28,10 +28,16 @@ class Settings:
     gateway_database_url: str = os.getenv("GATEWAY_DATABASE_URL", "postgresql://gateway:gateway@127.0.0.1:5433/gateway")
     rag_statement_timeout_ms: int = int(os.getenv("RAG_STATEMENT_TIMEOUT_MS", "1000"))
     llm_base_url: str = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-    recent_orders_limit: int = int(os.getenv("RECENT_ORDERS_LIMIT", "5"))
+    recent_orders_limit: int = int(os.getenv("RECENT_ORDERS_LIMIT", "10"))
+    # Short-term memory (D61): Redis. Empty = memory switched off (every chat starts fresh).
+    redis_url: str = os.getenv("REDIS_URL", "")
     # POL-DWA-001 §4 access window. TEMPORARY constant: in Milestone 2 ⑤ reads it as an ACTIVE
     # structured value (D13). Do not hard-code it anywhere else.
     worker_access_window_h: int = int(os.getenv("WORKER_ACCESS_WINDOW_H", "24"))
+    # The phone numbers of the static fallback text (app/fallback.py). In NO document: set them in .env. Empty = left out.
+    cs_phone: str = os.getenv("CS_PHONE", "")
+    emergency_phone: str = os.getenv("EMERGENCY_PHONE", "")
+    dispatch_phone: str = os.getenv("DISPATCH_PHONE", "")
 
     def model_for(self, node: str) -> str:
         """Model for a node: env LLM_MODEL_<NODE> > LLM_MODEL > llm/models.py. "" = not configured."""

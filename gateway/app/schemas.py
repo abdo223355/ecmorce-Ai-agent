@@ -53,6 +53,20 @@ class BackendReturn(_Strict):
     item: str | None
 
 
+class BackendReturnRow(_Strict):
+    """One return of the customer, from GET /customer/returns (the order id is kept: it is the return's order)."""
+    return_id: str
+    order_id: str
+    status: ReturnStatus
+    created_at: datetime
+    last_updated: datetime
+    item: str | None
+
+
+class BackendReturns(_Strict):
+    returns: list[BackendReturnRow]
+
+
 class BackendOrder(_Strict):
     order_id: str
     customer_id: str

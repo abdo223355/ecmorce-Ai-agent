@@ -8,9 +8,11 @@ customers and delivery workers. It sits between the website and the existing Nov
 It answers from the backend data + the company policies (RAG), and hands off to humans when needed.
 This is a LEARNING + portfolio project of عبدالرحمن (AI student). The design is finished
 (Phases 1–6, decisions D1–D160, in `docs/design/`). Phase 7 = implementation.
+**Purpose (his words, 2026-10-27): to understand how to build an agent.** The Gateway is the vehicle; connect each step to
+the general method (see the project skill `agent-building-purpose`).
 
 ## 2. Who builds what (agreed 2026-10-22)
-- **Already built (Milestone 1, by Claude in the design chat):**
+- **Already built (Milestone 1):**
   - NovaCart backend: Flask + PostgreSQL, seeded realistic data, JWT login.
   - Gateway infrastructure: FastAPI API, token check, backend client, agent tools.
   - Docker Compose. Do NOT redesign these parts. If the agent needs a change there, explain why
@@ -20,7 +22,8 @@ This is a LEARNING + portfolio project of عبدالرحمن (AI student). The d
   - `gateway/app/agent/`: LangGraph state, nodes, edges, routing; customer agent + worker agent;
     classify / reply / judge+rewrite; memory cards.
 - **Infrastructure still to come (Milestone 2+, NOT his part):**
-  - ⑤ Business Rules (`check_eligibility`), ③ Redis memory store, ⑧ circuit breakers / Degraded mode.
+  - ⑤ Business Rules: cancel, return and exchange eligibility are BUILT (`gateway/app/rules/`, one module per policy).
+    ③ Redis memory: first slice BUILT (`gateway/app/memory.py`, a pending list only). ⑧ circuit breakers / Degraded mode: not built.
   - ⑨ outbox + Ticketing, ⑩ audit tables.
   - ⑪ P1 pattern check, PII scrub at ingress, D66 validate, the 19 templates.
   - Default: these are built by Claude as code guardrails AROUND his agent. His agent receives a
@@ -122,6 +125,6 @@ This is a LEARNING + portfolio project of عبدالرحمن (AI student). The d
   - `cd gateway && pytest -q`
 - Try a tool without the agent:
   1. Log in: `POST :8000/auth/login {"username":"c-100003","password":"NovaCart#2026"}`.
-  2. Call `GET :8080/dev/tools/order_details?arg=NC-100007` with `Authorization: Bearer <token>`.
+  2. Call `GET :8080/dev/tools/order_details?arg=NC-100007` with `Authorization: Bearer <token>` (needs `DEV_TOOLS=1` in `.env`; it is off by default).
 - Python 3.12. Agent libraries (add when the roadmap step needs them): langgraph, langchain-core,
   langchain-openai (OpenRouter through base_url), sentence-transformers or an API embedding (D72).

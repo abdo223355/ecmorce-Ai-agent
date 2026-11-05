@@ -5,3 +5,10 @@ __pycache__/
 .venv/
 keys/
 *.db
+
+# local-only secrets of the ui (made-up admin passwords)
+ui/SEED_ADMINS.local.md
+*.local.md
+
+# output of gateway/evals/quality_eval.py
+gateway/evals/quality_eval.json

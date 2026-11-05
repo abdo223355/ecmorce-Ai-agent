@@ -19,7 +19,7 @@ from pydantic import BaseModel, ValidationError
 
 from .config import settings
 from .identity import Identity
-from .schemas import BackendOrder, BackendRecentOrders, BackendShipment, BackendShipmentsToday
+from .schemas import BackendOrder, BackendRecentOrders, BackendReturns, BackendShipment, BackendShipmentsToday
 
 M = TypeVar("M", bound=BaseModel)
 TRANSIENT_STATUS = {502, 503, 504}
@@ -92,6 +92,9 @@ class BackendClient:
     async def recent_orders(self, identity: Identity, deadline: Deadline) -> BackendRecentOrders:
         return await self._get(identity, "/customer/orders/recent", BackendRecentOrders, deadline,
                                params={"limit": settings.recent_orders_limit})
+
+    async def returns(self, identity: Identity, deadline: Deadline) -> BackendReturns:
+        return await self._get(identity, "/customer/returns", BackendReturns, deadline)
 
     async def order(self, identity: Identity, order_id: str, deadline: Deadline) -> BackendOrder:
         return await self._get(identity, f"/customer/orders/{order_id}", BackendOrder, deadline)

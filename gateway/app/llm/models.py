@@ -1,13 +1,16 @@
 """Which model each node uses. Model names are not secrets, so they live here and not in .env.
 
-These are starting choices. The final pick comes from comparing models on the evaluation set.
+These are measured choices on small samples, to be re-checked under load and with the D66 text checks.
 Set LLM_MODEL_<NODE> (for example LLM_MODEL_CLASSIFY) in the environment to override one for a quick test.
 """
 from __future__ import annotations
 
 MODELS: dict[str, str] = {
-    "classify": "google/gemma-3-12b-it",      # small and fast: median 0.89 s in the speed test (cap is 1.0 s)
-    "reply": "anthropic/claude-haiku-5.5",   # stronger, handles Arabic well (cap is 2.0 s)
+    # Picked from the container bake-offs with the no-retention rule on (night 80). classify: haiku-5.5 got 28 of 32
+    # right (gemma-3-12b, the earlier pick, 8 of 16 and slower), with reasoning off, p50 1.6 s, p95 about 3 s.
+    "classify": "anthropic/claude-haiku-5.5",
+    # reply: deepseek-v4.1-flash with reasoning off, p95 1.9 s for policy answers and 1.4 s for fact replies.
+    "reply": "deepseek/deepseek-v4.1-flash",
 }
 
 # Embedding model. It has to be multilingual: the documents are English, the questions can be Arabic,

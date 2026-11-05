@@ -99,3 +99,26 @@ def test_worker_access_window_closed_after_24h():
 def test_customer_cannot_use_worker_tools():
     c = client_with(lambda r: httpx.Response(200, json={}))
     assert run(worker.my_shipments_today(c, CUST, "list", Deadline(8))).status == "denied"
+
+
+# ---------- my_returns (night 123) ----------
+def returns_json(*ids):
+    return {"returns": [{"return_id": rid, "order_id": "NC-100001", "status": "Received", "created_at": NOW.isoformat(),
+                         "last_updated": NOW.isoformat(), "item": "Watch", "customer_id": "C-100001", "reason": "x"}
+                        for rid in ids]}
+
+
+def test_my_returns_gives_the_rows_and_calls_one_endpoint():
+    seen = []
+    c = client_with(lambda r: seen.append(r.url.path) or httpx.Response(200, json=returns_json("R-500001", "R-500002")))
+    res = run(customer.my_returns(c, CUST, Deadline(8)))
+    assert res.ok and [r.return_id for r in res.data] == ["R-500001", "R-500002"] and seen == ["/customer/returns"]
+    assert "customer_id" not in str(res.data[0].model_dump()) and "reason" not in str(res.data[0].model_dump())
+
+
+def test_my_returns_is_for_customers_only_and_maps_backend_failures():
+    called = []
+    c = client_with(lambda r: called.append(r) or httpx.Response(200, json=returns_json()))
+    assert run(customer.my_returns(c, WORK, Deadline(8))).status == "denied" and not called
+    assert run(customer.my_returns(client_with(lambda r: httpx.Response(500)), CUST, Deadline(8))).status == "unavailable"
+    assert run(customer.my_returns(client_with(lambda r: httpx.Response(200, json={"nope": 1})), CUST, Deadline(8))).status == "data_issue"

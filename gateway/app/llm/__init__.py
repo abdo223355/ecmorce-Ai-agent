@@ -43,6 +43,8 @@ class LLMAdapter(ABC):
         schema: type[BaseModel],
         timeout_s: float,
         system: str | None = None,
+        max_tokens: int | None = None,
+        reasoning_effort: str | None = None,
     ) -> LLMResult:
         """Ask the model for structured output.
 
@@ -50,6 +52,10 @@ class LLMAdapter(ABC):
         schema     pydantic model the answer must match; on success result.data is an instance of it
         timeout_s  hard limit for this one call
         system     optional system prompt
+        max_tokens optional cap on the answer length (D59). An answer cut by the cap is a bad_output, never a
+                   half-sentence passed on as if it were complete.
+        reasoning_effort  optional OpenRouter reasoning effort ("none", "low", ...). A model that does not reason
+                   ignores it. "none" turns the hidden thinking off (it cut reply time by half or more, night 76).
 
         Expected failures never raise: they return LLMResult(status != "ok", reason=...).
         """

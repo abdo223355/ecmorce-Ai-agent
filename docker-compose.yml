@@ -5,7 +5,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-dev-only}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -24,7 +24,7 @@ services:
   backend:          # the NovaCart e-commerce backend (Flask, D25)
     build: ./backend
     environment:
-      DATABASE_URL: postgresql+psycopg://novacart:novacart@postgres:5432/novacart
+      DATABASE_URL: postgresql+psycopg://novacart:${NOVACART_DB_PASSWORD:?set NOVACART_DB_PASSWORD in .env}@postgres:5432/novacart
       KEY_DIR: /app/keys
     volumes: ["backend_keys:/app/keys"]
     ports: ["127.0.0.1:8000:8000"]
@@ -37,14 +37,32 @@ services:
     environment:
       BACKEND_URL: http://backend:8000
       JWKS_URL: http://backend:8000/.well-known/jwks.json
-      GATEWAY_DATABASE_URL: postgresql+psycopg://gateway:gateway@postgres:5432/gateway
+      GATEWAY_DATABASE_URL: postgresql+psycopg://gateway:${GATEWAY_DB_PASSWORD:?set GATEWAY_DB_PASSWORD in .env}@postgres:5432/gateway
       REDIS_URL: redis://redis:6379/0
-      DEV_TOOLS: "1"
+      CS_PHONE: ${CS_PHONE:-}                   # phone numbers of the static fallback text (in no document): set in .env, empty = left out
+      EMERGENCY_PHONE: ${EMERGENCY_PHONE:-}
+      DISPATCH_PHONE: ${DISPATCH_PHONE:-}
+      DEV_TOOLS: ${DEV_TOOLS:-0}                 # token-protected tool endpoints for trying tools without the agent; set DEV_TOOLS=1 in .env to open them
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     ports: ["127.0.0.1:8080:8080"]
     depends_on:
       backend: {condition: service_started}
       redis: {condition: service_started}
+    restart: unless-stopped
+
+  ui:               # the user chat screen (Streamlit): customer and delivery worker
+    build: ./ui
+    environment:
+      BACKEND_URL: http://backend:8000
+      GATEWAY_URL: http://gateway:8080
+      # a LIMITED database role (infra/postgres/ui_role.sql): it reads, and changes only an account's sign-in counters
+      GATEWAY_DATABASE_URL: postgresql://ui_app:${UI_DB_PASSWORD:?set UI_DB_PASSWORD in .env}@postgres:5432/gateway
+      REDIS_URL: redis://redis:6379/0                                            # the Lab pings it
+      DEV_LAB: "1"                                                                # the owner's test bench page (set 0 to close it)
+    ports: ["127.0.0.1:8501:8501"]
+    depends_on:
+      gateway: {condition: service_started}
+      postgres: {condition: service_healthy}
     restart: unless-stopped
 
 volumes:

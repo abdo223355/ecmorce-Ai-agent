@@ -21,11 +21,12 @@ from sqlalchemy.orm import selectinload
 
 from .auth import KeyStore, check_password
 from .db import make_engine, make_session_factory
-from .models import Order, Shipment, UserAccount
+from .models import Order, Return, Shipment, UserAccount
 
 CAIRO = ZoneInfo("Africa/Cairo")
-RECENT_LIMIT_DEFAULT = int(os.getenv("RECENT_ORDERS_LIMIT", "5"))  # config (Phase 3: limit is config)
+RECENT_LIMIT_DEFAULT = int(os.getenv("RECENT_ORDERS_LIMIT", "10"))  # config (Phase 3: limit is config)
 RECENT_LIMIT_MAX = 20
+RETURNS_LIMIT = 20          # the newest returns of one customer; more than this is not a normal case
 
 
 def iso(value):
@@ -110,6 +111,25 @@ def create_app(database_url: str | None = None, key_dir: str | None = None) -> F
                 "last_updated": iso(o.last_updated),
             } for o in rows]
         return jsonify(orders=orders)
+
+    # ---------- endpoint 6: all the customer's returns (added night 123 so "my return status" does not depend on
+    # which orders happen to be the newest five) ----------
+    @app.get("/customer/returns")
+    @require_role("customer")
+    def my_returns():
+        with Session() as s:
+            rows = s.scalars(
+                select(Return).options(selectinload(Return.item))
+                .join(Order, Order.order_id == Return.order_id)
+                .where(Order.customer_id == g.subject_id)
+                .order_by(Return.created_at.desc()).limit(RETURNS_LIMIT)
+            ).all()
+            returns = [{
+                "return_id": r.return_id, "order_id": r.order_id, "status": r.status,
+                "created_at": iso(r.created_at), "last_updated": iso(r.last_updated),
+                "item": r.item.product_name if r.item else None,
+            } for r in rows]
+        return jsonify(returns=returns)
 
     # ---------- endpoint 2: one order ----------
     @app.get("/customer/orders/<order_id>")

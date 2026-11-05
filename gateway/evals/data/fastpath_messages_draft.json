@@ -1,0 +1,615 @@
+{
+ "status": "DRAFT for review by the project owner; not real user traffic",
+ "purpose": "measure the code fast path: expected is the intent it should decide, or null when it must go to the LLM",
+ "order_refs_used_when_measuring": {
+  "order_ref_1": "NC-100007"
+ },
+ "messages": [
+  {
+   "id": "FP-C1-01",
+   "role": "customer",
+   "message": "فين طلبي",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-02",
+   "role": "customer",
+   "message": "فين طلبي؟",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-03",
+   "role": "customer",
+   "message": "طلبي فين",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-04",
+   "role": "customer",
+   "message": "فين الاوردر بتاعي",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-05",
+   "role": "customer",
+   "message": "الاوردر وصل فين",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-06",
+   "role": "customer",
+   "message": "حالة الطلب",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-07",
+   "role": "customer",
+   "message": "حالة طلبي",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-08",
+   "role": "customer",
+   "message": "عايز اعرف حالة الطلب",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-09",
+   "role": "customer",
+   "message": "لو سمحت فين طلبي",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-10",
+   "role": "customer",
+   "message": "فين طلبي {order_ref_1}",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-11",
+   "role": "customer",
+   "message": "حالة الطلب {order_ref_1}",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-12",
+   "role": "customer",
+   "message": "feen talabi",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-13",
+   "role": "customer",
+   "message": "fein talabi?",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-14",
+   "role": "customer",
+   "message": "7alet el talab",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-15",
+   "role": "customer",
+   "message": "where is my order",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-16",
+   "role": "customer",
+   "message": "where's my order",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-17",
+   "role": "customer",
+   "message": "Where is my order?",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-18",
+   "role": "customer",
+   "message": "track my order",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-19",
+   "role": "customer",
+   "message": "order status",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C1-20",
+   "role": "customer",
+   "message": "what is the status of my order",
+   "expected": "C1"
+  },
+  {
+   "id": "FP-C3-01",
+   "role": "customer",
+   "message": "حالة المرتجع",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-02",
+   "role": "customer",
+   "message": "حالة المرتجع بتاعي",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-03",
+   "role": "customer",
+   "message": "المرتجع وصل فين",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-04",
+   "role": "customer",
+   "message": "فين المرتجع",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-05",
+   "role": "customer",
+   "message": "المرتجع بتاعي اتقبل",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-06",
+   "role": "customer",
+   "message": "عايز اعرف حالة المرتجع",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-07",
+   "role": "customer",
+   "message": "لو سمحت حالة المرتجع",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-08",
+   "role": "customer",
+   "message": "7alet el mortaga3",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-09",
+   "role": "customer",
+   "message": "halet el mortaga3",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-10",
+   "role": "customer",
+   "message": "feen el mortaga3",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-11",
+   "role": "customer",
+   "message": "return status",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-12",
+   "role": "customer",
+   "message": "status of my return",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-13",
+   "role": "customer",
+   "message": "where is my return",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-14",
+   "role": "customer",
+   "message": "did my return go through",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-15",
+   "role": "customer",
+   "message": "what's the status of my return",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-16",
+   "role": "customer",
+   "message": "حالة الارجاع",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-17",
+   "role": "customer",
+   "message": "طلب الارجاع بتاعي فين",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-18",
+   "role": "customer",
+   "message": "رجعت الطلب ولسه مفيش رد",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-19",
+   "role": "customer",
+   "message": "حالة المرتجع؟؟",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C3-20",
+   "role": "customer",
+   "message": "Return status?",
+   "expected": "C3"
+  },
+  {
+   "id": "FP-C6-01",
+   "role": "customer",
+   "message": "عايز اكلم موظف",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-02",
+   "role": "customer",
+   "message": "عاوز اكلم حد",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-03",
+   "role": "customer",
+   "message": "ممكن اكلم موظف",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-04",
+   "role": "customer",
+   "message": "كلمني موظف",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-05",
+   "role": "customer",
+   "message": "عايز اتكلم مع موظف خدمة العملاء",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-06",
+   "role": "customer",
+   "message": "عايز اكلم خدمة العملاء",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-07",
+   "role": "customer",
+   "message": "محتاج اكلم حد بشري",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-08",
+   "role": "customer",
+   "message": "وصلني بموظف",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-09",
+   "role": "customer",
+   "message": "3ayez akalem mowazaf",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-10",
+   "role": "customer",
+   "message": "3ayez akallem hadd",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-11",
+   "role": "customer",
+   "message": "i want to talk to a human",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-12",
+   "role": "customer",
+   "message": "talk to a human",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-13",
+   "role": "customer",
+   "message": "can I speak to an agent",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-14",
+   "role": "customer",
+   "message": "let me talk to a person",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-15",
+   "role": "customer",
+   "message": "I need a human",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-16",
+   "role": "customer",
+   "message": "connect me to an agent",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-17",
+   "role": "customer",
+   "message": "get me a real person",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-18",
+   "role": "customer",
+   "message": "ممكن موظف يكلمني",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-19",
+   "role": "customer",
+   "message": "عايز اتكلم مع حد",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-C6-20",
+   "role": "customer",
+   "message": "اكلم موظف",
+   "expected": "C6"
+  },
+  {
+   "id": "FP-W1-01",
+   "role": "worker",
+   "message": "شحناتي النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-02",
+   "role": "worker",
+   "message": "شحناتي",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-03",
+   "role": "worker",
+   "message": "شحناتي النهاردة",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-04",
+   "role": "worker",
+   "message": "شحناتي اليوم",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-05",
+   "role": "worker",
+   "message": "ايه شحناتي النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-06",
+   "role": "worker",
+   "message": "عندي ايه النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-07",
+   "role": "worker",
+   "message": "ايه الشحنات النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-08",
+   "role": "worker",
+   "message": "عايز اعرف شحناتي",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-09",
+   "role": "worker",
+   "message": "اوريني شحنات النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-10",
+   "role": "worker",
+   "message": "هوصل ايه النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-11",
+   "role": "worker",
+   "message": "shahnati el nharda",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-12",
+   "role": "worker",
+   "message": "shahnati",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-13",
+   "role": "worker",
+   "message": "my shipments",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-14",
+   "role": "worker",
+   "message": "my shipments today",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-15",
+   "role": "worker",
+   "message": "what do I have today",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-16",
+   "role": "worker",
+   "message": "what shipments do I have today",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-17",
+   "role": "worker",
+   "message": "show my shipments",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-18",
+   "role": "worker",
+   "message": "list my shipments for today",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-19",
+   "role": "worker",
+   "message": "ايه اللي عليا النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-W1-20",
+   "role": "worker",
+   "message": "الشحنات بتاعتي النهارده",
+   "expected": "W1"
+  },
+  {
+   "id": "FP-NEGC-01",
+   "role": "customer",
+   "message": "فين طلبي وليه اتأخر",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-02",
+   "role": "customer",
+   "message": "فين طلبي وحالة المرتجع",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-03",
+   "role": "customer",
+   "message": "حسابي اتسرق عايز اكلم موظف",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-04",
+   "role": "customer",
+   "message": "حد دخل على حسابي",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-05",
+   "role": "customer",
+   "message": "where is my order and why is it late",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-06",
+   "role": "customer",
+   "message": "عايز ارجع الطلب",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-07",
+   "role": "customer",
+   "message": "هل ينفع ارجع الساعة",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-08",
+   "role": "customer",
+   "message": "what is the return policy",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-09",
+   "role": "customer",
+   "message": "الطقس عامل ازاي",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-10",
+   "role": "customer",
+   "message": "عايز الغي الطلب",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-11",
+   "role": "customer",
+   "message": "طلبي مجاش ووصل في المتابعة انه اتسلم",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-12",
+   "role": "customer",
+   "message": "هو انا ينفع اكلم موظف ولا لا ليه المرتجع اتاخر",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGC-13",
+   "role": "customer",
+   "message": "فين طلبي {order_ref_9}",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-01",
+   "role": "worker",
+   "message": "عايز اكلم موظف",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-02",
+   "role": "worker",
+   "message": "i need a human",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-03",
+   "role": "worker",
+   "message": "مرتبي كام",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-04",
+   "role": "worker",
+   "message": "what is my salary",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-05",
+   "role": "worker",
+   "message": "اديني عنوان وتليفون العميل",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-06",
+   "role": "worker",
+   "message": "شحناتي النهارده وليه واحدة متأخرة",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-07",
+   "role": "worker",
+   "message": "شحنة S-700001 فين",
+   "expected": null
+  },
+  {
+   "id": "FP-NEGW-08",
+   "role": "worker",
+   "message": "ايه سياسة التسليم",
+   "expected": null
+  }
+ ]
+}

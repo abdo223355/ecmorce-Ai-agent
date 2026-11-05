@@ -1,73 +1,151 @@
 # NovaCart — Adaptive AI Gateway
 
-An AI support gateway for a fictional e-commerce company (NovaCart). Customers and delivery workers
-chat with it. It answers from live backend data and company policies (RAG), applies the rules in
-code, and hands off to humans when it should.
+An AI support layer for a fictional e-commerce company (NovaCart). Customers and delivery workers chat with it
+in Arabic or English. It answers from **live backend data** and **company policies (RAG)**, decides eligibility
+**in code** (never by the model), and **hands off to a human** when it should.
 
-Learning + portfolio project. The full design (decisions D1–D160) is in `docs/design/`.
+This is a learning + portfolio project. The goal was to understand how to build an agent, so the repository keeps
+the reasoning: written design decisions (D1–D160), a session log, and an honest list of the quality problems
+found and fixed, with numbers.
 
-## How it was built: design first, then code
-This is not "vibe coding". The system was analysed, designed and reviewed in phases before any
-implementation. Every phase has written artifacts, and the decisions are numbered (D1–D160) so code
-and tests can point back to them (for example D27 "no live retry" in the LLM adapter).
+## How it was built
 
-| Phase | What was done | Where |
-|---|---|---|
-| 1. Business | Business requirements (v1.2 → v1.3) | `docs/process/1-business/` |
-| 2. System analysis | Actors, flows, requirements | `docs/process/2-system-analysis/` |
-| 3. Architecture | System context, containers, quality attributes, audit | `docs/process/3-architecture/`, `docs/design/Phase3_*` |
-| 4. AI design | Agents, tools, RAG, prompts, memory, guardrails, model/cost, evaluation, scenario tests | `docs/design/Phase4_*` |
-| 5. Reliability and safety | Resilience, latency budget, data safety, eval thresholds, go-live readiness | `docs/design/Phase5_*`, `docs/process/5-reliability-and-safety/` |
-| 6. Production | Deployment, MLOps decisions | `docs/design/Phase6_*`, `docs/process/6-production/` |
-| 7. Implementation | In progress (see below) | `backend/`, `gateway/` |
-| 8–9. Testing and optimization | Not started | |
+Abdelrahman designed the project and directed the work: the idea, the phases and design decisions, the prompts,
+the test data and the evaluation sets. He chose what to build, reviewed the results and decided what to change.
+**Claude Code (Anthropic's coding assistant) helped write the code** from those instructions, and the code was
+run, measured and corrected against real messages before it was kept.
 
-Working method for the AI part: small steps, each ending with something that runs (`docs/AGENT_ROADMAP.md`),
-and a session log of what was decided and what is still open (`docs/PROGRESS.md`). Measured choices are
-recorded with their numbers, for example the model speed test in `docs/PROGRESS.md`.
+## The idea in one picture
 
-Implementation status: backend, Gateway infrastructure and agent tools (Milestone 1); LLM adapter with
-per-node model and latency budget; RAG chunking. Not built yet: embeddings and pgvector store, retrieval,
-the LangGraph agents, memory, evaluation runs.
+```
+website / chat screen
+        |  token (identity comes only from the verified token)
+        v
+   Gateway (FastAPI)  --->  P1 safety pattern check (code)
+        |                   scrub typed order numbers into placeholders
+        v
+   customer agent  or  delivery-worker agent   (chosen by code from the token role)
+        |
+        |  classify (LLM, structured output)  ->  safety gate (code)  ->  fixed tool plan per intent (code calls tools)
+        |                                                                    |
+        |                           backend data . policy search (RAG) . eligibility rules (code)
+        v
+   reply (LLM writes, or code builds the text) -> validate -> assemble
+        |
+        v  answer, or a handoff to Customer Service / dispatch
+```
 
-## What is in Milestone 1
-- **backend/** — the "existing" NovaCart backend:
-  - Flask + PostgreSQL, JWT (RS256) login + JWKS, and 4 data endpoints.
-  - Realistic synthetic data, with hand-made policy edge cases (`backend/SEED_SCENARIOS.md`).
-- **gateway/** — FastAPI Gateway:
-  - token verification;
-  - backend client (retries inside the 8 s budget);
-  - agent tools: recent orders, order details, today's shipments, shipment details (with denials,
-    access window and field allow-list);
-  - the contracts for the agent and the RAG (the next part to build).
-- **docker-compose.yml** — postgres (+pgvector), redis, backend, gateway.
+Rules the code never breaks:
+- The model never sees identity, token or customer id.
+- Numbers, dates and order ids in a reply are placeholders filled in by code.
+- Cancellation, return and exchange eligibility are pure functions of the order data (`gateway/app/rules/`).
+  Things the data cannot show (item condition, stock) are told as the policy's condition or sent to a person.
+- No free tool loop: each intent has a fixed plan. Message text is never logged.
+
+## What is built
+
+| Part | Where |
+|---|---|
+| NovaCart backend: Flask + PostgreSQL, JWT (RS256), seeded realistic data | `backend/` |
+| Gateway: identity, backend client, tools, audit events, handoff outbox | `gateway/app/` |
+| Agents: LangGraph graph, classify, safety gate, plans, clarify, reply, assemble | `gateway/app/agent/` |
+| RAG: chunking, embeddings, pgvector store, retrieval over the policy corpus | `gateway/app/rag/` |
+| Eligibility rules: cancellation, return, exchange (one module per policy) | `gateway/app/rules/` |
+| Short-term memory (a pending-choice card in Redis, 30 min) | `gateway/app/memory.py`, `agent/pending.py` |
+| LLM adapter with per-node models and an 8 s latency budget | `gateway/app/llm/` |
+| Chat screen, staff views and an admin dashboard (Streamlit) | `ui/` |
+| Evaluation scripts that run the real system | `gateway/evals/` |
+
+## Quality, measured on natural messages
+
+A green test suite did not mean the agent was useful: hundreds of tests passed while "hi" answered "I could not
+finish". So the project measures natural messages through the real `/chat` (`gateway/evals/quality_eval.py`).
+
+| Stage | Acceptable answers |
+|---|---|
+| First working version | 45% |
+| After small talk, typed order numbers, missing plans | 78% to 87% |
+| After retry on timeout and a proper classifier prompt | 92% to 96% |
+| After lists, memory and eligibility answers | 98% to 100% (single runs vary by a point or two on provider timeouts) |
+
+The classifier prompt reached 100% on its 72-message set and 54/54 on held-out messages written after tuning.
+
+## Problems we found, and how we solved them
+
+Full detail (how each was found, the cause, the change, the numbers before and after) is in
+[`docs/QUALITY_AND_FIXES.md`](docs/QUALITY_AND_FIXES.md).
+
+| # | Problem | Cause | Fix |
+|---|---|---|---|
+| 1 | "hi" answered "I could not finish" | a greeting has no request, and an empty turn became the failure text | small talk is answered by code, with no model call |
+| 2 | A typed order number was not understood | the ingress scrub did not exist | the number becomes `{order_ref_N}` before the agent; only code keeps the real id |
+| 3 | Some intents had no plan | plan rows were missing | rows added; the rest hand off honestly |
+| 4 | Slow and failing model calls | one attempt, fixed caps, and our own parallel load | bounded retry on timeout only; measured one at a time |
+| 5 | Written answers thrown away silently | no reason was recorded | each refusal records its reason code |
+| 6 | The classifier prompt was two sentences | never tuned | a full prompt, then checked on held-out messages |
+| 7 | The screen showed raw codes and ISO dates | no presentation layer | readable statuses and dates in the user's language |
+| 8 | "Return status" said "not found" | the agent searched orders, not returns | a new `GET /customer/returns` endpoint and a list-based plan |
+| 9 | "Where is my order?" asked an unanswerable question | no list of orders on the way | code-built list, 0.1 s, no model call |
+| 10 | "2" was not understood after the agent's own list | no memory | a pending-choice card in Redis; code resolves "2", "the second" or a product name |
+| 11–13 | "Can I cancel / return / exchange?" always went to a person | eligibility not built | rules in code, per policy, tested on the policy's edge days |
+| 14 | Security and operations review | reviewing our own work | see the last section of the fixes file |
+
+Decisions where the policy PDFs were silent or ambiguous are listed in
+[`docs/ELIGIBILITY_DECISIONS.md`](docs/ELIGIBILITY_DECISIONS.md), so they are not mistaken for official policy.
 
 ## Run
+
 ```
-cp .env.example .env          # add your OpenRouter key later (agent steps)
+cp .env.example .env     # fill in your own values; .env is never committed
 docker compose up --build
 ```
-- Backend: http://localhost:8000/health · Gateway: http://localhost:8080/health
+
+- Chat screen: http://127.0.0.1:8501
+- Backend health: http://127.0.0.1:8000/health, Gateway health: http://127.0.0.1:8080/health
+- `OPENROUTER_API_KEY` is needed for the model calls. Use a provider with no data retention.
+- Phone numbers for the fallback text (`CS_PHONE`, `EMERGENCY_PHONE`, `DISPATCH_PHONE`) are yours to fill in; none is invented.
 
 ## Demo accounts
-- Password for all demo accounts: `NovaCart#2026` (demo only).
-- Customers: `c-100001` … `c-100010`. Workers: `w-2001` … `w-2005`.
-- What each account is good for: `backend/SEED_SCENARIOS.md`. Inside Docker, the file is
-  regenerated for the day of the seed in the `backend_keys` volume.
 
-## Try it
+- Password for all demo customers and workers: `NovaCart#2026` (demo data only).
+- Customers `c-100001` to `c-100010` hold hand-made policy edge cases, and `c-100201` to `c-100205` hold orders in every state.
+- Workers `w-2001` to `w-2005`.
+- What each account is good for: [`backend/SEED_SCENARIOS.md`](backend/SEED_SCENARIOS.md) and [`backend/SEED_MORE.md`](backend/SEED_MORE.md).
+- The edge cases are dated relative to the day the data was seeded. On a later day, re-seed:
+
 ```
-curl -s -X POST localhost:8000/auth/login -H "content-type: application/json" \
-     -d '{"username":"c-100003","password":"NovaCart#2026"}'
-curl -s "localhost:8080/dev/tools/order_details?arg=NC-100007" -H "Authorization: Bearer <token>"
+docker compose run --rm --no-deps --entrypoint python -v ./backend:/src -w /src backend -m novacart_backend.seed --reset
+docker compose run --rm --no-deps --entrypoint python -v ./backend:/src -w /src backend -m novacart_backend.seed_more
 ```
+
+Try questions such as: `ينفع ألغي NC-100014؟`, `can I cancel order NC-100015?`, `ينفع أرجّع NC-100001؟`, `ينفع أبدّل NC-100001؟`.
+Phrasing matters by design: "I want to cancel" is a request to act, which the agent hands to a person;
+"can I cancel?" asks about eligibility, which the agent answers.
 
 ## Tests
+
 ```
-cd backend && pip install -r requirements.txt && pytest -q
+cd backend && pip install -r requirements.txt && pytest -q tests
 cd gateway && pip install -r requirements.txt && pytest -q
 ```
 
-## Working with Claude Code
-Open this folder in Claude Code. It reads `CLAUDE.md` automatically. Paste the prompt from
-`docs/START_PROMPT.md` in the first session.
+Quality runs against the real stack (need a model key): `python gateway/evals/quality_eval.py`,
+`stability_eval.py`, `classify_eval.py`.
+
+## Known limits (stated honestly)
+
+- Eligibility covers cancel, return and exchange. The data has no sub-category for small appliances, no item
+  condition, no exchange stock and no processing start time, so those are told as conditions or sent to a person.
+- Only order numbers are scrubbed at ingress. The rest of the personal-data scrub and a final output validation are not built.
+- Memory is a first slice (a pending list). There are no earlier-turn cards, so "why?" is not understood from memory.
+- No circuit breakers or degraded mode. No TLS (local use only). A known admin name can be locked for 15 minutes by 5 wrong tries.
+- The quality sets are small (52 to 72 messages). About 3% of requests still fail on a model timeout.
+- Much of the Arabic and English wording is a draft that the project owner is still reviewing.
+
+## Where to read more
+
+- `docs/design/` — the design phases and decisions D1–D160 (source of truth).
+- `docs/PROGRESS.md` — the session log: what was decided, what is open.
+- `docs/QUALITY_AND_FIXES.md` — problems found and fixed, with numbers.
+- `docs/ELIGIBILITY_DECISIONS.md` — decisions taken where the policies are silent.
+- `CLAUDE.md` — the working rules given to Claude Code, the coding assistant used on this project.

@@ -12,6 +12,12 @@ from . import LLMAdapter, LLMResult
 from .errors import failure, from_http_status
 
 
+# D111: only endpoints that do not keep or train on the prompt. OpenRouter fields (provider selection docs):
+# data_collection "deny" = providers that do not collect user data; zdr true = only Zero Data Retention endpoints.
+# A model with no such endpoint fails instead of being served by one that retains data.
+NO_RETENTION = {"data_collection": "deny", "zdr": True}
+
+
 class OpenRouterAdapter(LLMAdapter):
     def __init__(self, model: str | None = None, api_key: str | None = None,
                  base_url: str | None = None, client: httpx.AsyncClient | None = None):
@@ -22,7 +28,8 @@ class OpenRouterAdapter(LLMAdapter):
         self._client = client or httpx.AsyncClient(timeout=None)
 
     async def generate(self, prompt: str, schema: type[BaseModel], timeout_s: float,
-                       system: str | None = None) -> LLMResult:
+                       system: str | None = None, max_tokens: int | None = None,
+                       reasoning_effort: str | None = None) -> LLMResult:
         if not self._api_key or not self._model:
             return failure("unavailable", "llm_not_configured")
 
@@ -30,10 +37,15 @@ class OpenRouterAdapter(LLMAdapter):
         body = {
             "model": self._model,
             "messages": messages,
+            "provider": NO_RETENTION,
             "response_format": {"type": "json_schema",
                                 "json_schema": {"name": schema.__name__, "strict": True,
                                                 "schema": schema.model_json_schema()}},
         }
+        if max_tokens is not None:
+            body["max_tokens"] = max_tokens
+        if reasoning_effort is not None:
+            body["reasoning"] = {"effort": reasoning_effort}
         start = time.monotonic()
         try:
             # One deadline for the whole call: connect, send, wait and read.
@@ -55,6 +67,8 @@ class OpenRouterAdapter(LLMAdapter):
     def _parse(resp: httpx.Response, schema: type[BaseModel], latency_s: float) -> LLMResult:
         try:
             payload = resp.json()
+            if payload["choices"][0].get("finish_reason") == "length":    # cut by max_tokens: never use half an answer
+                return failure("bad_output", "truncated", latency_s)
             content = payload["choices"][0]["message"]["content"]
             data = schema.model_validate_json(content)
         except (ValueError, KeyError, IndexError, TypeError):   # pydantic's ValidationError is a ValueError

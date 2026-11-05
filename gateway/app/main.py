@@ -7,20 +7,31 @@ Degraded mode, ⑨ outbox/Ticketing, ⑩ audit tables, ⑪ P1 patterns / PII scr
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from contextlib import asynccontextmanager
-from dataclasses import asdict
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .agent import AgentContext, run_agent
+from .agent import AgentContext, AgentRejected, run_agent
 from .backend_client import BackendClient, Deadline
+from .agent import pending as pend
 from .config import settings
+from .memory import MemoryStore
+from .events import EventStore, build_event, public_answer
+from .handoffs import HandoffStore, keep_the_promise
 from .identity import AuthError, Identity, JwksCache, verify_token
 from .rag import retrieve
 from .rag.embeddings import EmbeddingAdapter, get_embedder
 from .rag.store import PolicyStore
+from .scrub import scrub_order_numbers
 from .tools import ToolResult, customer, worker
+
+# The nodes log one JSON line each at INFO (counts, template ids, latency, tokens; never message text, D108).
+# Without a handler and a level the root logger drops them, so a successful model call left no trace.
+logging.basicConfig(format="%(message)s")
+logging.getLogger("gateway").setLevel(logging.INFO)
 
 
 class BoundTools:
@@ -51,6 +62,9 @@ class BoundTools:
 
     async def my_recent_orders(self):
         return await customer.my_recent_orders(self._c, self._id, self._d)
+
+    async def my_returns(self):
+        return await customer.my_returns(self._c, self._id, self._d)
 
     async def order_details(self, order_id: str):
         return await customer.order_details(self._c, self._id, order_id, self._d)
@@ -95,8 +109,26 @@ async def lifespan(app: FastAPI):
     app.state.store = PolicyStore()
     await app.state.store.open()
     app.state.embedder = get_embedder()
+    app.state.handoffs = HandoffStore()
+    await app.state.handoffs.open()
+    try:
+        await app.state.handoffs.ensure_schema()
+    except Exception as e:                                       # noqa: BLE001  without the table every handoff falls back (no promise is made)
+        logging.getLogger("gateway.handoffs").error('{"event": "schema_failed", "error": "%s"}', type(e).__name__)
+    app.state.memory = MemoryStore(settings.redis_url)
+    app.state.events = EventStore()
+    await app.state.events.open()
+    try:
+        await app.state.events.ensure_schema()
+    except Exception as e:                                       # noqa: BLE001  the chat must start even if the table could not be made
+        logging.getLogger("gateway.events").warning('{"event": "schema_failed", "error": "%s"}', type(e).__name__)
+    from .agent.runner import system
+    system()                       # import LangGraph and compile the agent graphs now, not on the first user request (~1.8 s)
     yield
     await app.state.store.close()
+    await app.state.events.close()
+    await app.state.handoffs.close()
+    await app.state.memory.aclose()
     await app.state.backend.aclose()
 
 
@@ -122,21 +154,32 @@ async def health():
 
 
 @app.post("/chat")
-async def chat(body: ChatIn, authorization: str | None = Header(default=None)):
+async def chat(body: ChatIn, background: BackgroundTasks, authorization: str | None = Header(default=None)):
     identity = await current_identity(authorization)
     deadline = Deadline(settings.request_budget_s)
     tools = bound_tools(identity, deadline)
-    ctx = AgentContext(role=identity.role, message=body.message,  # TODO M2: scrub at ingress (D107)
-                       chat_id=f"{identity.subject_id}:{identity.session_id}",
-                       remaining_s=deadline.remaining())
+    message, order_refs = scrub_order_numbers(body.message)      # D107 first slice: typed order numbers become {order_ref_N}
+    chat_id = f"{identity.subject_id}:{identity.session_id}"
+    memory = getattr(app.state, "memory", None)
+    card = await memory.get(chat_id) if memory is not None else None            # D61: the pending clarification, if any
+    pending = card.get("pending") if isinstance(card, dict) and pend.valid(card.get("pending")) else None
+    ctx = AgentContext(role=identity.role, message=message, order_refs={**order_refs, **pend.order_refs_for(pending)},   # TODO M2: the rest of the scrub (phones, emails, cards)
+                       chat_id=chat_id, pending=pending,
+                       deadline_at=deadline.end)
+    started = time.monotonic()
     tools.prefetch_embedding(ctx.message)        # the agent passes this same text as `query` to policy_search
     try:
         result = await run_agent(ctx, tools)
-    except NotImplementedError:
-        return {"status": "not_ready", "message": "The agent is not built yet (docs/AGENT_ROADMAP.md)."}
+    except AgentRejected:
+        raise HTTPException(403, "no agent for this role") from None         # D36: any other role gets no agent
     finally:
         tools.close()
-    return {"status": "ok", "result": asdict(result)}  # TODO M2: D66 validate + render placeholders
+    result = await keep_the_promise(app.state.handoffs, identity.role, identity.subject_id, result, body.message)   # D14: written BEFORE the answer
+    background.add_task(app.state.events.record, build_event(identity.role, result, time.monotonic() - started))
+    new_card = result.memory.get("pending")
+    if memory is not None and (new_card or pending):             # a new card, or the old one is finished or replaced
+        background.add_task(memory.put, chat_id, {"pending": new_card} if new_card else None)
+    return {"status": "ok", "result": public_answer(result)}  # TODO M2: D66 validate + render placeholders
 
 
 # ---- developer-only endpoints to try the tools without an agent (disabled when DEV_TOOLS=0) ----
@@ -150,6 +193,7 @@ if os.getenv("DEV_TOOLS", "1") == "1":
         t = bound_tools(identity, Deadline(settings.request_budget_s))
         calls = {
             "my_recent_orders": lambda: t.my_recent_orders(),
+            "my_returns": lambda: t.my_returns(),
             "order_details": lambda: t.order_details(arg or ""),
             "my_shipments_today": lambda: t.my_shipments_today(arg or "list"),
             "shipment_details": lambda: t.shipment_details(arg or "", (fields or "").split(",") if fields else []),

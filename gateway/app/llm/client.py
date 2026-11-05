@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+import time
+from dataclasses import replace
 from functools import lru_cache
 
 import httpx
@@ -14,7 +16,7 @@ from pydantic import BaseModel
 
 from ..config import settings
 from . import LLMAdapter, LLMResult
-from .budget import timeout_for
+from .budget import ATTEMPT_CAP_S, MAX_ATTEMPTS, MAX_TOKENS, REASONING_EFFORT, timeout_for
 from .errors import failure
 from .openrouter import OpenRouterAdapter
 
@@ -43,8 +45,21 @@ def get_llm(node: str) -> LLMAdapter:
 
 async def ask(node: str, prompt: str, schema: type[BaseModel], remaining_s: float,
               system: str | None = None, reserve_s: float = 0.0) -> LLMResult:
-    """Pick the node's model, work out the timeout, and call it once (no retry)."""
-    timeout_s = timeout_for(node, remaining_s, reserve_s)
-    if timeout_s is None:
-        return failure("timeout", "below_minimum_window")      # not enough time, so no call is made
-    return await get_llm(node).generate(prompt, schema, timeout_s, system)
+    """Pick the node's model, work out the timeout, and call it. A call that TIMES OUT is tried once more while the
+    request still has time (the retry lives here, not in the adapter). Any other failure (rate limit, bad output,
+    provider error) is returned at once: asking again would not help. details["attempts"] says how many calls were made."""
+    left = remaining_s
+    attempts = 0
+    while True:
+        timeout_s = timeout_for(node, left, reserve_s, cap_s=ATTEMPT_CAP_S[node])
+        if timeout_s is None:
+            if attempts == 0:
+                return failure("timeout", "below_minimum_window")      # not enough time, so no call is made
+            return replace(result, details={**result.details, "attempts": attempts})   # no time for another try
+        started = time.monotonic()
+        attempts += 1
+        result = await get_llm(node).generate(prompt, schema, timeout_s, system, MAX_TOKENS.get(node),
+                                              REASONING_EFFORT.get(node))
+        left -= time.monotonic() - started
+        if result.status != "timeout" or attempts >= MAX_ATTEMPTS:
+            return replace(result, details={**result.details, "attempts": attempts}) if attempts > 1 else result

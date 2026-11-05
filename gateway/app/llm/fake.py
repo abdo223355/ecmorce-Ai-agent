@@ -17,8 +17,10 @@ class FakeAdapter(LLMAdapter):
         self._queue = list(responses)
         self.calls: list[dict] = []
 
-    async def generate(self, prompt, schema, timeout_s, system=None) -> LLMResult:
-        self.calls.append({"prompt": prompt, "schema": schema, "timeout_s": timeout_s, "system": system})
+    async def generate(self, prompt, schema, timeout_s, system=None, max_tokens=None,
+                       reasoning_effort=None) -> LLMResult:
+        self.calls.append({"prompt": prompt, "schema": schema, "timeout_s": timeout_s, "system": system,
+                           "max_tokens": max_tokens, "reasoning_effort": reasoning_effort})
         if not self._queue:
             return LLMResult("unavailable", reason="fake_queue_empty")
         item = self._queue.pop(0)

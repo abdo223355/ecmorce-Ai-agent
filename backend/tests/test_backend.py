@@ -78,3 +78,28 @@ def test_inconsistent_delivered_without_date_exists(client):
     h = login(client, "c-100007")
     body = client.get("/customer/orders/NC-100021", headers=h).json
     assert body["status"] == "Delivered" and body["delivered_at"] is None
+
+
+def test_my_returns_lists_only_own_returns_newest_first_without_internal_fields(client):
+    h = login(client, "c-100001")
+    body = client.get("/customer/returns", headers=h).json
+    rows = body["returns"]
+    assert rows and len(rows) <= 20
+    own = {o["order_id"] for o in client.get("/customer/orders/recent?limit=20", headers=h).json["orders"]}
+    assert all(set(r) == {"return_id", "order_id", "status", "created_at", "last_updated", "item"} for r in rows)
+    created = [r["created_at"] for r in rows]
+    assert created == sorted(created, reverse=True)
+    for r in rows:                                                    # each return belongs to an order of this customer
+        assert client.get(f"/customer/orders/{r['order_id']}", headers=h).status_code == 200
+    assert "reason" not in str(rows) and "customer_id" not in str(rows)
+
+
+def test_my_returns_never_shows_another_customers_return(client):
+    mine = {r["return_id"] for r in client.get("/customer/returns", headers=login(client, "c-100001")).json["returns"]}
+    other = {r["return_id"] for r in client.get("/customer/returns", headers=login(client, "c-100002")).json["returns"]}
+    assert not (mine & other)
+
+
+def test_my_returns_needs_a_customer_token(client):
+    assert client.get("/customer/returns").status_code == 401
+    assert client.get("/customer/returns", headers=login(client, "w-2001")).status_code == 403

@@ -36,6 +36,21 @@ async def my_recent_orders(client: BackendClient, identity: Identity, deadline: 
     return ToolResult("ok", data=views)
 
 
+async def my_returns(client: BackendClient, identity: Identity, deadline: Deadline) -> ToolResult:
+    """Tool 1b - all the customer's returns (newest first, at most 20), whichever order they belong to."""
+    if (bad := _require_customer(identity)):
+        return bad
+    try:
+        res = await client.returns(identity, deadline)
+    except BackendUnavailable:
+        return ToolResult("unavailable", reason="backend_unavailable")
+    except BackendBadData:
+        return ToolResult("data_issue", reason="backend_schema_invalid")
+    except BackendError:
+        return ToolResult("unavailable", reason="backend_error")
+    return ToolResult("ok", data=list(res.returns))
+
+
 async def order_details(client: BackendClient, identity: Identity, order_id: str,
                         deadline: Deadline) -> ToolResult:
     """Tool 2 — one order (items with D44 flags + returns list)."""
@@ -73,4 +88,13 @@ async def check_eligibility(kind: str, order: OrderView) -> ToolResult:
     The eligibility answer is ALWAYS computed by code from ACTIVE structured values (D6, D13),
     never by the LLM. Input = the validated OrderView from order_details, never LLM arguments.
     """
+    if kind == "cancel":                                           # POL-CAN-001: built (app/rules/cancellation.py)
+        from ..rules.cancellation import check_cancellation
+        return ToolResult("ok", data=check_cancellation(order))
+    if kind == "return":                                           # POL-RET-001: built (app/rules/returns.py)
+        from ..rules.returns import check_return
+        return ToolResult("ok", data=check_return(order))
+    if kind == "exchange":                                         # POL-EXC-001: built (app/rules/exchange.py)
+        from ..rules.exchange import check_exchange
+        return ToolResult("ok", data=check_exchange(order))
     return ToolResult("not_implemented", reason="business_rules_milestone_2", details={"kind": kind})

@@ -35,7 +35,15 @@ EMBED_TIMEOUT_S = 120.0          # generous: this runs offline, and the limit ap
 EMBED_ATTEMPTS = 3               # retrying is fine here; the "no retry" rule is only for live chat requests
 _RETRYABLE = {"timeout", "rate_limited", "unavailable"}
 
-DEFAULT_CORPUS = Path(__file__).resolve().parents[4] / "Rag_files" / "NovaCart_RAG_Corpus"
+def _default_corpus() -> Path:
+    # The corpus sits next to the repo folder. Inside the Docker image the file is only four levels deep,
+    # so there is no such parent and we fall back to the working directory (RAG_CORPUS_DIR overrides both).
+    parents = Path(__file__).resolve().parents
+    base = parents[4] if len(parents) > 4 else Path.cwd()
+    return base / "Rag_files" / "NovaCart_RAG_Corpus"
+
+
+DEFAULT_CORPUS = _default_corpus()
 
 
 @dataclass
