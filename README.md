@@ -18,6 +18,13 @@ the test data and the evaluation sets. He chose what to build, reviewed the resu
 **Claude Code (Anthropic's coding assistant) helped write the code** from those instructions, and the code was
 run, measured and corrected against real messages before it was kept.
 
+## Demo
+
+![Chat demo: sign in as a demo customer, then ask whether three orders can be cancelled](docs/img/chat-demo.gif)
+
+A demo customer asks whether orders can be cancelled, in Arabic and in English. The verdict comes from code that reads
+the order's status; the model only phrases the answer. A order in Processing is passed to a person instead of guessed.
+
 ## The idea in one picture
 
 ```
