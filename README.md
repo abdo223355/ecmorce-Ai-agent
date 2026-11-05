@@ -1,5 +1,8 @@
 # NovaCart — Adaptive AI Gateway
 
+[![tests](https://github.com/abdo223355/ecmorce-Ai-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/abdo223355/ecmorce-Ai-agent/actions/workflows/tests.yml)
+![license](https://img.shields.io/badge/license-MIT-blue)
+
 An AI support layer for a fictional e-commerce company (NovaCart). Customers and delivery workers chat with it
 in Arabic or English. It answers from **live backend data** and **company policies (RAG)**, decides eligibility
 **in code** (never by the model), and **hands off to a human** when it should.
