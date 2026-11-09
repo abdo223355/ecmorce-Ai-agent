@@ -118,6 +118,13 @@ docker compose up --build
 - `OPENROUTER_API_KEY` is needed for the model calls. Use a provider with no data retention.
 - Phone numbers for the fallback text (`CS_PHONE`, `EMERGENCY_PHONE`, `DISPATCH_PHONE`) are yours to fill in; none is invented.
 
+## Demo mode (free hosting)
+
+`ui/demo_app.py` is the same chat screen replaying answers **recorded from the real system**, so it runs on a free host with no
+backend, database or model key. It is a replay of a fixed list of questions, not a live model, and the screen says so.
+Run it with `cd ui && streamlit run demo_app.py`. How to publish it on Streamlit Community Cloud, and how to re-record the
+answers: [`docs/DEPLOY_DEMO.md`](docs/DEPLOY_DEMO.md).
+
 ## Demo accounts
 
 - Password for all demo customers and workers: `NovaCart#2026` (demo data only).

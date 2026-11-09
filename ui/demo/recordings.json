@@ -1,0 +1,627 @@
+{
+ "recorded_on": "2026-11-09",
+ "items": [
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "cancel",
+   "message": "ينفع ألغي NC-100014؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "طلبك {order_id} ({order_status}) ينفع يتلغى، كله أو منتج منه بس. الإلغاء بيتم عن طريق خدمة العملاء: اكتب \"كلّم موظف\" وأنا أحوّلك.",
+      "render_values": {
+       "order_id": "NC-100014",
+       "order_status": "Pending",
+       "window_hours": "4"
+      },
+      "cited": [
+       "POL-CAN-001 §2@2.0"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "cancel",
+   "message": "ينفع ألغي NC-100015؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "طلبك {order_id} ({order_status}) اتجهّز فمينفعش يتلغى دلوقتي. عندك اختياران: ترفض الاستلام عند الباب، أو ترجّعه بعد التسليم حسب سياسة الإرجاع.",
+      "render_values": {
+       "order_id": "NC-100015",
+       "order_status": "Packed",
+       "window_hours": "4"
+      },
+      "cited": [
+       "POL-CAN-001 §2@2.0"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "cancel",
+   "message": "ينفع ألغي NC-100012؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "طلبك {order_id} ({order_status}) بيتجهّز دلوقتي. الإلغاء في الحالة دي ممكن بس في أول {window_hours} ساعات من بدء التجهيز، وموظف خدمة العملاء هو اللي بيقرر.",
+      "render_values": {
+       "order_id": "NC-100012",
+       "order_status": "Processing",
+       "window_hours": "4"
+      },
+      "cited": [
+       "POL-CAN-001 §2@2.0"
+      ]
+     },
+     {
+      "part_index": 1,
+      "kind": "template",
+      "template_id": 5,
+      "text": null,
+      "render_values": {},
+      "cited": []
+     }
+    ],
+    "handoff_reason": "PENDING_OWNER",
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": {
+     "parts": [
+      {
+       "part_index": 0,
+       "intent": "C9",
+       "label": "Cancellation eligibility",
+       "outcome": "answered",
+       "clue": null,
+       "p1_flag": null
+      }
+     ],
+     "error_codes": [],
+     "policies": [
+      "POL-CAN-001 §2@2.0"
+     ],
+     "verified_order_ids": [
+      "NC-100012"
+     ],
+     "order_number_mentioned_unverified": false
+    }
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "cancel",
+   "message": "can I cancel order NC-100014?",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "Your order {order_id} ({order_status}) can be cancelled, either all of it or a single item. Cancellation is handled by Customer Service: say \"talk to an agent\" and I will pass you on.",
+      "render_values": {
+       "order_id": "NC-100014",
+       "order_status": "Pending",
+       "window_hours": "4"
+      },
+      "cited": [
+       "POL-CAN-001 §2@2.0"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "cancel",
+   "message": "can I cancel order NC-100015?",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "Your order {order_id} ({order_status}) is already prepared, so it can no longer be cancelled. You have two options: refuse the delivery at the door, or return it after delivery under the return policy.",
+      "render_values": {
+       "order_id": "NC-100015",
+       "order_status": "Packed",
+       "window_hours": "4"
+      },
+      "cited": [
+       "POL-CAN-001 §2@2.0"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "return",
+   "message": "ينفع أرجّع NC-100014؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "طلبك {order_id} ({order_status}) لسه ما اتسلّمش، فمينفعش يتّرجع دلوقتي. لو عايز تلغيه اسألني عن الإلغاء.",
+      "render_values": {
+       "order_id": "NC-100014",
+       "order_status": "Pending",
+       "electronics_days": "15"
+      },
+      "cited": [
+       "POL-RET-001 §3@2.1"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100001",
+   "role": "customer",
+   "group": "return",
+   "message": "ينفع أرجّع NC-100001؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "طلبك {order_id} اتسلّم يوم {delivered_date}. بالنسبة للإرجاع:\n\n- {i1_name}: مش بيتّرجع بسبب تغيير الرأي. بيتّرجع بس لو معيب أو غلط، لحد {i1_end_date}، ومحتاج رقم الطلب واسم المنتج وصورتين واضحتين ووصف مختصر.\n\nالإرجاع بيتم عن طريق خدمة العملاء: اكتب \"كلّم موظف\" وأنا أحوّلك.",
+      "render_values": {
+       "order_id": "NC-100001",
+       "order_status": "Delivered",
+       "electronics_days": "15",
+       "delivered_date": "2026-10-21",
+       "i1_name": "Logitech MX Master 3S",
+       "i1_end_date": "2026-11-20",
+       "i1_defect_date": "2026-11-20"
+      },
+      "cited": [
+       "POL-RET-001 §2@2.1",
+       "POL-RET-001 §5@2.1"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100001",
+   "role": "customer",
+   "group": "return",
+   "message": "can I return order NC-100001?",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "Your order {order_id} was delivered on {delivered_date}. About returning it:\n\n- {i1_name}: it cannot be returned for a change of mind. It can be returned only if it is defective or the wrong item, until {i1_end_date}, with the order number, the item name, at least two clear photos and a short description.\n\nA return is handled by Customer Service: say \"talk to an agent\" and I will pass you on.",
+      "render_values": {
+       "order_id": "NC-100001",
+       "order_status": "Delivered",
+       "electronics_days": "15",
+       "delivered_date": "2026-10-21",
+       "i1_name": "Logitech MX Master 3S",
+       "i1_end_date": "2026-11-20",
+       "i1_defect_date": "2026-11-20"
+      },
+      "cited": [
+       "POL-RET-001 §2@2.1",
+       "POL-RET-001 §5@2.1"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100001",
+   "role": "customer",
+   "group": "exchange",
+   "message": "ينفع أبدّل NC-100001؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "طلبك {order_id} اتسلّم يوم {delivered_date}. بالنسبة للاستبدال (ده غير الإرجاع: الاستبدال بيخلص بمنتج بديل):\n\n- {i1_name}: الإلكترونيات مش بتتبدّل إلا لو معيبة (بنفس المنتج) أو اتسلّمت غلط، لحد {i1_end_date}، ولو في مخزون. وغير كده بتتّرجع.\n\nالاستبدال بيتم لو المتغير المطلوب متاح وقت التنفيذ. لو أغلى بتدفع الفرق، ولو أرخص الفرق بيتردّ رصيد في المتجر مش كاش. ولو مش متاح تختار متغير تاني، أو تنضم لقايمة انتظار لحد {waiting_days} أيام، أو تحوّله لإرجاع.\n\nالاستبدال بيتم عن طريق خدمة العملاء: اكتب \"كلّم موظف\" وأنا أحوّلك.",
+      "render_values": {
+       "order_id": "NC-100001",
+       "order_status": "Delivered",
+       "waiting_days": "7",
+       "delivered_date": "2026-10-21",
+       "i1_name": "Logitech MX Master 3S",
+       "i1_end_date": "2026-11-20"
+      },
+      "cited": [
+       "POL-EXC-001 §2@1.1",
+       "POL-EXC-001 §3@1.1",
+       "POL-EXC-001 §6@1.1",
+       "POL-EXC-001 §4@1.1"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100001",
+   "role": "customer",
+   "group": "exchange",
+   "message": "can I exchange order NC-100001?",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "Your order {order_id} was delivered on {delivered_date}. About an exchange (this is not a return: an exchange ends with a replacement item):\n\n- {i1_name}: electronics are exchanged only if defective (for the same product) or sent by mistake, until {i1_end_date}, if there is stock. Otherwise it is returned.\n\nAn exchange goes ahead if the requested variant is in stock when it is processed. If it costs more you pay the difference; if it costs less the difference is given as store credit, not cash. If it is unavailable you can choose another variant, join a waiting list for up to {waiting_days} days, or turn it into a return.\n\nAn exchange is handled by Customer Service: say \"talk to an agent\" and I will pass you on.",
+      "render_values": {
+       "order_id": "NC-100001",
+       "order_status": "Delivered",
+       "waiting_days": "7",
+       "delivered_date": "2026-10-21",
+       "i1_name": "Logitech MX Master 3S",
+       "i1_end_date": "2026-11-20"
+      },
+      "cited": [
+       "POL-EXC-001 §2@1.1",
+       "POL-EXC-001 §3@1.1",
+       "POL-EXC-001 §6@1.1",
+       "POL-EXC-001 §4@1.1"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100003",
+   "role": "customer",
+   "group": "return",
+   "message": "ينفع أرجّع NC-100007؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "طلبك {order_id} اتسلّم يوم {delivered_date}. بالنسبة للإرجاع:\n\n- {i1_name}: مش بيتّرجع بسبب تغيير الرأي. بيتّرجع بس لو معيب أو غلط، لحد {i1_end_date}، ومحتاج رقم الطلب واسم المنتج وصورتين واضحتين ووصف مختصر.\n\nالإرجاع بيتم عن طريق خدمة العملاء: اكتب \"كلّم موظف\" وأنا أحوّلك.",
+      "render_values": {
+       "order_id": "NC-100007",
+       "order_status": "Delivered",
+       "electronics_days": "15",
+       "delivered_date": "2026-10-30",
+       "i1_name": "Kids Pajama Set",
+       "i1_end_date": "2026-11-29",
+       "i1_defect_date": "2026-11-29"
+      },
+      "cited": [
+       "POL-RET-001 §2@2.1",
+       "POL-RET-001 §5@2.1"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100006",
+   "role": "customer",
+   "group": "returns",
+   "message": "حالة المرتجع بتاعي إيه؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "clarify",
+      "template_id": null,
+      "text": "عندك أكتر من مرتجع، أنهي واحد؟\n{choices_text}",
+      "render_values": {
+       "choices_text": "1) Slim Fit Jeans · 2026-11-02\n2) Xiaomi Redmi Note 13 · 2026-11-02\n3) Slim Fit Jeans · 2026-10-30\n4) Kids Pajama Set · 2026-10-26\n5) Winter Hoodie · 2026-10-23"
+      },
+      "cited": []
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100009",
+   "role": "customer",
+   "group": "clarify",
+   "message": "عايز أرجّع السامسونج",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "clarify",
+      "template_id": null,
+      "text": "أنهي طلب تقصد؟\n{choices_text}\nاكتب رقم الطلب أو اسم المنتج.",
+      "render_values": {
+       "choices_text": "1) Samsung Galaxy A55 · 2026-10-30\n2) Samsung Galaxy A55 · 2026-10-29"
+      },
+      "cited": []
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100010",
+   "role": "customer",
+   "group": "orders",
+   "message": "فين طلبي؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "عندك {count} طلبات في الطريق:\n- {o1_product}: {o1_status}، آخر تحديث {o1_updated} ({o1_id})\n- {o2_product}: {o2_status}، آخر تحديث {o2_updated} ({o2_id})\n- {o3_product}: {o3_status}، آخر تحديث {o3_updated} ({o3_id})\n- {o4_product}: {o4_status}، آخر تحديث {o4_updated} ({o4_id})\n\nلو قصدك طلب تاني اكتب رقمه.",
+      "render_values": {
+       "count": "4",
+       "o1_id": "NC-101089",
+       "o1_product": "Cotton Polo Shirt",
+       "o1_status": "Out for Delivery",
+       "o1_updated": "2026-11-03T08:32:12+02:00",
+       "o2_id": "NC-101088",
+       "o2_product": "Leather Jacket",
+       "o2_status": "Shipped",
+       "o2_updated": "2026-11-02T17:10:00+02:00",
+       "o3_id": "NC-100631",
+       "o3_product": "Samsung Galaxy A55, Python Crash Course",
+       "o3_status": "Out for Delivery",
+       "o3_updated": "2026-11-02T12:55:00+02:00",
+       "o4_id": "NC-100025",
+       "o4_product": "Winter Hoodie",
+       "o4_status": "Out for Delivery",
+       "o4_updated": "2026-11-01T13:54:00+02:00"
+      },
+      "cited": []
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "common",
+   "message": "مرحبا",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "أهلًا بيك في NovaCart! أقدر أساعدك في: حالة طلبك، وحالة المرتجع، وأسئلة عن سياسات NovaCart، وأوصّلك بموظف خدمة العملاء. اكتب سؤالك.",
+      "render_values": {},
+      "cited": []
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "common",
+   "message": "ما هي سياسة الاسترجاع؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "تسمح السياسة بإرجاع العناصر المؤهلة ضمن النافذة الزمنية المحددة لكل فئة، وتُحسب المدة من لحظة التسليم. لا يمكن إرجاع العناصر غير القابلة للإرجاع كالمنتجات الرقمية أو البطاقات أو الأطعمة.",
+      "render_values": {},
+      "cited": [
+       "POL-RET-001 §1@2.1",
+       "POL-RET-001 §2@2.1"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "common",
+   "message": "حد دخل على حسابي من غير علمي",
+   "result": {
+    "segments": [
+     {
+      "part_index": -1,
+      "kind": "template",
+      "template_id": 8,
+      "text": null,
+      "render_values": {},
+      "cited": []
+     }
+    ],
+    "handoff_reason": "SAFE",
+    "priority": "P1",
+    "block_session_data": true,
+    "handoff_summary": {
+     "parts": [
+      {
+       "part_index": 0,
+       "intent": "C7",
+       "label": "Safety: account takeover, data exposure, physical danger",
+       "outcome": "safety_report",
+       "clue": null,
+       "p1_flag": "takeover"
+      }
+     ],
+     "error_codes": [],
+     "policies": [],
+     "verified_order_ids": [],
+     "order_number_mentioned_unverified": false
+    }
+   }
+  },
+  {
+   "account": "c-100005",
+   "role": "customer",
+   "group": "common",
+   "message": "عايز أكلّم موظف",
+   "result": {
+    "segments": [
+     {
+      "part_index": 1,
+      "kind": "template",
+      "template_id": 5,
+      "text": null,
+      "render_values": {},
+      "cited": []
+     }
+    ],
+    "handoff_reason": "PENDING_OWNER",
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": {
+     "parts": [
+      {
+       "part_index": 0,
+       "intent": "C6",
+       "label": "Talk to a human",
+       "outcome": "handoff_requested",
+       "clue": null,
+       "p1_flag": null
+      }
+     ],
+     "error_codes": [],
+     "policies": [],
+     "verified_order_ids": [],
+     "order_number_mentioned_unverified": false
+    }
+   }
+  },
+  {
+   "account": "w-2001",
+   "role": "worker",
+   "group": "worker",
+   "message": "شحناتي النهارده",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "template",
+      "template_id": 3,
+      "text": null,
+      "render_values": {
+       "query": "list",
+       "date": "2026-11-09",
+       "count": "0",
+       "rows_text": ""
+      },
+      "cited": []
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  },
+  {
+   "account": "w-2001",
+   "role": "worker",
+   "group": "worker",
+   "message": "إيه الإجراء لو العميل مش موجود؟",
+   "result": {
+    "segments": [
+     {
+      "part_index": 0,
+      "kind": "text",
+      "template_id": null,
+      "text": "اتصل بالعميل مرتين بينهما 10 دقائق، وانتظر في الموقع حتى 15 دقيقة إجمالًا، وسجّل المحاولات في التطبيق. لا تترك الطرد لدى الجيران. إذا بقي العميل غير متاح، يقرر المرسل الفشل في التسليم أو إعادة المحاولة.",
+      "render_values": {},
+      "cited": [
+       "PRC-DIS-001 §2@1.2"
+      ]
+     }
+    ],
+    "handoff_reason": null,
+    "priority": null,
+    "block_session_data": false,
+    "handoff_summary": null
+   }
+  }
+ ]
+}
