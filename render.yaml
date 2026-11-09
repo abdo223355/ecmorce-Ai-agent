@@ -1,0 +1,47 @@
+# Render Blueprint: the backend and the Gateway as two free web services.
+# The chat screen runs on Streamlit Community Cloud (ui/public_app.py); the database is Neon; see docs/DEPLOY_LIVE.md.
+#
+# Every value marked `sync: false` is a SECRET or an address that you type in the Render dashboard when the Blueprint is
+# created. Nothing secret is written in this file.
+services:
+  - type: web
+    name: novacart-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: PORT                    # the container listens on 8000
+        value: "8000"
+      - key: KEY_DIR
+        value: /app/keys
+      - key: DATABASE_URL            # Neon connection string of the `novacart` database
+        sync: false
+
+  - type: web
+    name: novacart-gateway
+    runtime: docker
+    plan: free
+    dockerfilePath: ./gateway/Dockerfile
+    dockerContext: ./gateway
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: BACKEND_URL             # public address of novacart-backend, for example https://novacart-backend.onrender.com
+        sync: false
+      - key: JWKS_URL                # BACKEND_URL + /.well-known/jwks.json
+        sync: false
+      - key: GATEWAY_DATABASE_URL    # Neon connection string of the `gateway` database
+        sync: false
+      - key: OPENROUTER_API_KEY      # your key, with a spending cap set in the OpenRouter dashboard
+        sync: false
+      - key: REDIS_URL               # optional (Upstash); leave empty and the chat simply has no memory
+        sync: false
+      - key: RATE_LIMIT_PER_MIN      # per account, in any 60 seconds
+        value: "10"
+      - key: RATE_LIMIT_PER_DAY      # for the whole Gateway, per UTC day
+        value: "300"
+      - key: DEV_TOOLS               # the developer endpoints stay closed
+        value: "0"

@@ -21,6 +21,15 @@ class SessionExpired(Exception):
     """The token was rejected (it lives 30 minutes): the user has to log in again."""
 
 
+class RateLimited(Exception):
+    """The Gateway refused the request because a usage limit was reached. `reason` is "minute" (too fast) or "day" (the
+    daily cap of a public deployment)."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 class ServiceUnavailable(Exception):
     """The backend or the Gateway did not answer, or answered with an error the user cannot fix."""
 
@@ -76,6 +85,12 @@ class NovaCartApi:
             raise ServiceUnavailable("gateway") from None
         if r.status_code == 401:
             raise SessionExpired()
+        if r.status_code == 429:
+            try:
+                reason = r.json().get("detail")
+            except ValueError:
+                reason = None
+            raise RateLimited("day" if reason == "day" else "minute")
         if r.status_code != 200:
             raise ServiceUnavailable(f"gateway {r.status_code}")
         result = r.json()["result"]

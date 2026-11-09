@@ -11,7 +11,7 @@ import os
 
 import streamlit as st
 
-from novacart_ui.api import LoginFailed, NovaCartApi, ServiceUnavailable, SessionExpired
+from novacart_ui.api import LoginFailed, NovaCartApi, RateLimited, ServiceUnavailable, SessionExpired
 from novacart_ui.options import options_for
 from novacart_ui.texts import detect_language, render_reply
 
@@ -19,6 +19,10 @@ ROLE_TITLE = {"customer": "مساعد العملاء", "worker": "مساعد ا�
 WELCOME = {"customer": "أهلًا بيك في NovaCart. اختار مشكلتك من الأزرار، أو اكتب سؤالك.",
            "worker": "أهلًا بيك. اختار من الأزرار، أو اكتب سؤالك عن شحناتك."}
 PER_ROW = 3
+LIMIT_MESSAGE = {
+    "minute": "بعتّ رسايل كتير بسرعة. استنى دقيقة وجرّب تاني.\n\nToo many messages too quickly: wait a minute and try again.",
+    "day": "وصل الاستخدام المجاني للنهارده للحد اللي اتحدد. جرّب بكرة.\n\nToday's free usage limit was reached: please try again tomorrow.",
+}
 
 st.set_page_config(page_title="NovaCart", page_icon="💬", layout="centered")
 st.markdown("""<style>
@@ -55,7 +59,7 @@ def login_view() -> None:
                 st.error("اسم المستخدم أو كلمة المرور غلط.")
             except ServiceUnavailable:
                 st.error("الخدمة مش متاحة دلوقتي. جرّب بعد شوية.")
-    st.caption("حسابات التجربة موجودة في backend/SEED_SCENARIOS.md")
+    st.caption(os.getenv("LOGIN_HINT", "حسابات التجربة موجودة في backend/SEED_SCENARIOS.md"))
 
 
 def show(message: dict, dev: bool) -> None:
@@ -77,6 +81,8 @@ def send(prompt: str, dev: bool) -> None:
         except SessionExpired:
             logout("الجلسة انتهت. سجّل دخول تاني.")
             st.rerun()
+        except RateLimited as limited:
+            answer = {"role": "assistant", "content": LIMIT_MESSAGE[limited.reason], "raw": None}
         except ServiceUnavailable:
             answer = {"role": "assistant", "content": "الخدمة مش متاحة دلوقتي. جرّب بعد شوية.", "raw": None}
         else:

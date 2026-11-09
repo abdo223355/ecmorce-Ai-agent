@@ -125,6 +125,11 @@ backend, database or model key. It is a replay of a fixed list of questions, not
 Run it with `cd ui && streamlit run demo_app.py`. How to publish it on Streamlit Community Cloud, and how to re-record the
 answers: [`docs/DEPLOY_DEMO.md`](docs/DEPLOY_DEMO.md).
 
+## Live system on free hosting
+
+The real AI, open to visitors, on Streamlit Community Cloud + Render + Neon: [`docs/DEPLOY_LIVE.md`](docs/DEPLOY_LIVE.md)
+(`render.yaml` and `ui/public_app.py`). It includes usage limits in the Gateway and a spending cap on the model key.
+
 ## Demo accounts
 
 - Password for all demo customers and workers: `NovaCart#2026` (demo data only).

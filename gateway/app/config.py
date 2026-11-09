@@ -31,6 +31,9 @@ class Settings:
     recent_orders_limit: int = int(os.getenv("RECENT_ORDERS_LIMIT", "10"))
     # Short-term memory (D61): Redis. Empty = memory switched off (every chat starts fresh).
     redis_url: str = os.getenv("REDIS_URL", "")
+    # Limits on /chat for a public deployment (0 = off). See app/ratelimit.py.
+    rate_limit_per_min: int = int(os.getenv("RATE_LIMIT_PER_MIN", "0"))
+    rate_limit_per_day: int = int(os.getenv("RATE_LIMIT_PER_DAY", "0"))
     # POL-DWA-001 §4 access window. TEMPORARY constant: in Milestone 2 ⑤ reads it as an ACTIVE
     # structured value (D13). Do not hard-code it anywhere else.
     worker_access_window_h: int = int(os.getenv("WORKER_ACCESS_WINDOW_H", "24"))

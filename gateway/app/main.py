@@ -22,6 +22,7 @@ from .memory import MemoryStore
 from .events import EventStore, build_event, public_answer
 from .handoffs import HandoffStore, keep_the_promise
 from .identity import AuthError, Identity, JwksCache, verify_token
+from .ratelimit import RateLimiter
 from .rag import retrieve
 from .rag.embeddings import EmbeddingAdapter, get_embedder
 from .rag.store import PolicyStore
@@ -103,6 +104,7 @@ class ChatIn(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.backend = BackendClient()
+    app.state.limiter = RateLimiter(settings.rate_limit_per_min, settings.rate_limit_per_day)
     app.state.jwks = JwksCache(settings.jwks_url)
     # Open the policy store without waiting, so the Gateway still starts if the database is late.
     # A search while it is down returns ToolResult("unavailable") instead of crashing.
@@ -148,6 +150,14 @@ async def current_identity(authorization: str | None) -> Identity:
         raise HTTPException(401, "unauthorized") from None
 
 
+def enforce_rate_limit(subject_id: str) -> None:
+    """429 when this account (or the whole Gateway today) used its allowance. `detail` says which one: minute or day."""
+    limiter = getattr(app.state, "limiter", None)
+    blocked = limiter.check(subject_id) if limiter is not None else None
+    if blocked:
+        raise HTTPException(429, detail=blocked, headers={"Retry-After": "60" if blocked == "minute" else "3600"})
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -156,6 +166,7 @@ async def health():
 @app.post("/chat")
 async def chat(body: ChatIn, background: BackgroundTasks, authorization: str | None = Header(default=None)):
     identity = await current_identity(authorization)
+    enforce_rate_limit(identity.subject_id)                      # after the token check: an anonymous call spends nobody's allowance
     deadline = Deadline(settings.request_budget_s)
     tools = bound_tools(identity, deadline)
     message, order_refs = scrub_order_numbers(body.message)      # D107 first slice: typed order numbers become {order_ref_N}

@@ -44,6 +44,8 @@ services:
       DISPATCH_PHONE: ${DISPATCH_PHONE:-}
       DEV_TOOLS: ${DEV_TOOLS:-0}                 # token-protected tool endpoints for trying tools without the agent; set DEV_TOOLS=1 in .env to open them
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      RATE_LIMIT_PER_MIN: ${RATE_LIMIT_PER_MIN:-0}   # usage limits of /chat (0 = off); a public deployment sets them, see docs/DEPLOY_LIVE.md
+      RATE_LIMIT_PER_DAY: ${RATE_LIMIT_PER_DAY:-0}
     ports: ["127.0.0.1:8080:8080"]
     depends_on:
       backend: {condition: service_started}

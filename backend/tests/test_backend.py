@@ -103,3 +103,11 @@ def test_my_returns_never_shows_another_customers_return(client):
 def test_my_returns_needs_a_customer_token(client):
     assert client.get("/customer/returns").status_code == 401
     assert client.get("/customer/returns", headers=login(client, "w-2001")).status_code == 403
+
+
+def test_a_host_database_url_gets_the_psycopg_driver():
+    from novacart_backend.db import sqlalchemy_url
+    assert sqlalchemy_url("postgres://u:p@h/db?sslmode=require") == "postgresql+psycopg://u:p@h/db?sslmode=require"
+    assert sqlalchemy_url("postgresql://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert sqlalchemy_url("postgresql+psycopg://u:p@h/db") == "postgresql+psycopg://u:p@h/db"
+    assert sqlalchemy_url("sqlite://") == "sqlite://"

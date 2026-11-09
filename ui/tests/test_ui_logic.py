@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from novacart_ui.api import (ChatReply, LoginFailed, NovaCartApi, SegmentView, ServiceUnavailable, SessionExpired,
-                             UserSession)
+from novacart_ui.api import (ChatReply, LoginFailed, NovaCartApi, RateLimited, SegmentView, ServiceUnavailable,
+                             SessionExpired, UserSession)
 from novacart_ui.options import CUSTOMER_OPTIONS, WORKER_OPTIONS, options_for
 from novacart_ui.texts import TEXTS, detect_language, fill, render_reply, render_segment
 
@@ -60,6 +60,16 @@ def test_an_expired_token_is_session_expired_and_other_errors_are_unavailable():
     for status in (403, 500):
         with pytest.raises(ServiceUnavailable):
             api_with(lambda r, s=status: httpx.Response(s)).chat(UserSession("T", "customer"), "hi")
+
+
+def test_a_429_is_rate_limited_and_keeps_which_limit_it_was():
+    for detail, reason in (("minute", "minute"), ("day", "day"), ("something else", "minute")):
+        with pytest.raises(RateLimited) as limited:
+            api_with(lambda r, d=detail: httpx.Response(429, json={"detail": d})).chat(UserSession("T", "customer"), "hi")
+        assert limited.value.reason == reason
+    with pytest.raises(RateLimited) as limited:                          # a 429 whose body is not JSON is still a rate limit
+        api_with(lambda r: httpx.Response(429, text="slow down")).chat(UserSession("T", "customer"), "hi")
+    assert limited.value.reason == "minute"
 
 
 # ---------- texts ----------
