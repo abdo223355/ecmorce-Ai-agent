@@ -10,5 +10,10 @@ keys/
 ui/SEED_ADMINS.local.md
 *.local.md
 
+# connection strings written by a database CLI (never commit)
+.env.local
+.env.*.local
+.neon
+
 # output of gateway/evals/quality_eval.py
 gateway/evals/quality_eval.json
