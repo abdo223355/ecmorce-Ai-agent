@@ -37,8 +37,8 @@ services:
         sync: false
       - key: OPENROUTER_API_KEY      # your key, with a spending cap set in the OpenRouter dashboard
         sync: false
-      - key: REDIS_URL               # optional (Upstash); leave empty and the chat simply has no memory
-        sync: false
+      # REDIS_URL is not set on purpose: without it the chat has no short memory ("2" after a list is not understood).
+      # To add the memory later, create an Upstash Redis database and add REDIS_URL (rediss://...) in the Render dashboard.
       - key: RATE_LIMIT_PER_MIN      # per account, in any 60 seconds
         value: "10"
       - key: RATE_LIMIT_PER_DAY      # for the whole Gateway, per UTC day

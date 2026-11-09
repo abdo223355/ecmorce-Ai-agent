@@ -41,8 +41,11 @@ A public site spends your key on every message, and the demo password is public.
    - gateway `GATEWAY_DATABASE_URL`: the Neon string of `gateway`;
    - gateway `OPENROUTER_API_KEY`: your key;
    - gateway `BACKEND_URL`: the public address of the backend service (for example `https://novacart-backend.onrender.com`);
-   - gateway `JWKS_URL`: that address plus `/.well-known/jwks.json`;
-   - gateway `REDIS_URL`: empty, or an Upstash `rediss://...` address.
+   - gateway `JWKS_URL`: that address plus `/.well-known/jwks.json`.
+   The Blueprint does not ask for `REDIS_URL`: the chat then works without its short memory. To add it later, create an
+   Upstash Redis database and add `REDIS_URL` (a `rediss://...` address) in the gateway's Environment tab.
+   If the name `novacart-backend` is already taken on Render, the address gets a random suffix: after the backend is created,
+   copy its real address from its page and correct `BACKEND_URL` and `JWKS_URL` of the gateway.
 3. The first start of the backend fills the database with the demo data (a few minutes). A service on the free plan sleeps when
    idle, so the first message after a pause takes 30 to 60 seconds.
 
